@@ -1,84 +1,180 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import './App.css'
 
 function App() {
   const [activeTab, setActiveTab] = useState('home')
   const [proposals, setProposals] = useState([])
   const [isGenerating, setIsGenerating] = useState(false)
-  // Usar apenas a chave API do arquivo .env
+  // Status da API Flask
+  const [apiStatus, setApiStatus] = useState({ status: 'checking', message: 'Verificando conexão...' })
+  // Usar apenas a chave API do arquivo .env para compatibilidade
   const envApiKey = import.meta.env.VITE_OPENAI_API_KEY || ''
   const [formData, setFormData] = useState({
     clientName: '',
-    serviceType: '',
+    projectDescription: '',
+    additionalPoints: '',
     value: '',
-    deadline: ''
+    deadline: '',
+    showAdditionalPoints: false
   })
+  
+  // Verificar status da API ao carregar
+  useEffect(() => {
+    checkApiStatus()
+  }, [])
 
   const handleInputChange = (e) => {
     const { name, value } = e.target
     setFormData(prev => ({ ...prev, [name]: value }))
   }
+  
+  // Função para verificar o status da API Flask
+  const checkApiStatus = async () => {
+    try {
+      setApiStatus({ status: 'checking', message: 'Verificando conexão...' })
+      const response = await fetch('http://localhost:5000/api/health')
+      const data = await response.json()
+      
+      if (data.status === 'online') {
+        setApiStatus({ status: 'online', message: 'API Flask conectada' })
+      } else {
+        setApiStatus({ status: 'error', message: 'API Flask indisponível' })
+      }
+    } catch (error) {
+      setApiStatus({ status: 'offline', message: 'API Flask não está disponível' })
+    }
+  }
 
   const generateProposal = async () => {
-    if (!formData.clientName || !formData.serviceType || !formData.value || !formData.deadline) {
-      alert('Por favor, preencha todos os campos!')
+    if (!formData.clientName || !formData.projectDescription || !formData.value || !formData.deadline) {
+      alert('Por favor, preencha todos os campos obrigatórios!')
       return
     }
 
     setIsGenerating(true)
-    // Usar apenas a chave API do arquivo .env
-    const currentApiKey = envApiKey
     
-    await new Promise(resolve => setTimeout(resolve, currentApiKey && currentApiKey.startsWith('sk-') ? 3000 : 2000))
-    
-    const newProposal = {
-      id: Date.now(),
-      clientName: formData.clientName,
-      serviceType: formData.serviceType,
-      value: formData.value,
-      deadline: formData.deadline,
-      content: currentApiKey && currentApiKey.startsWith('sk-') 
-        ? `Prezado(a) ${formData.clientName},
+    try {
+      // Verificar se a API está online
+      if (apiStatus.status === 'online') {
+        // Usar API Flask
+        const response = await fetch('http://localhost:5000/api/generate-proposal', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            clientName: formData.clientName,
+            projectDescription: formData.projectDescription,
+            additionalPoints: formData.additionalPoints,
+            value: formData.value,
+            deadline: formData.deadline,
+          }),
+        })
+        
+        const result = await response.json()
+        
+        if (result.success && result.proposal) {
+          const serverProposal = result.proposal
+          
+          const newProposal = {
+            id: Date.now(),
+            clientName: serverProposal.clientName,
+            projectDescription: serverProposal.projectDescription,
+            additionalPoints: serverProposal.additionalPoints,
+            value: serverProposal.value,
+            deadline: serverProposal.deadline,
+            content: serverProposal.content,
+            createdAt: new Date().toLocaleDateString('pt-BR'),
+            generatedWith: serverProposal.generatedWith
+          }
+          
+          setProposals(prev => [newProposal, ...prev])
+        } else {
+          throw new Error(result.error || 'Erro ao gerar proposta')
+        }
+      } else {
+        // Modo de fallback - usar o método antigo direto no frontend
+        const currentApiKey = envApiKey
+        
+        await new Promise(resolve => setTimeout(resolve, currentApiKey && currentApiKey.startsWith('sk-') ? 3000 : 2000))
+        
+        const newProposal = {
+          id: Date.now(),
+          clientName: formData.clientName,
+          projectDescription: formData.projectDescription,
+          additionalPoints: formData.additionalPoints,
+          value: formData.value,
+          deadline: formData.deadline,
+          content: currentApiKey && currentApiKey.startsWith('sk-') 
+            ? `Prezado(a) ${formData.clientName},
 
-É com grande satisfação que apresentamos nossa proposta comercial personalizada para ${formData.serviceType}.
+É com grande satisfação que apresentamos nossa proposta comercial personalizada para o projeto de ${formData.projectDescription}.
 
 🎯 RESUMO EXECUTIVO:
-Nossa equipe especializada desenvolveu uma solução sob medida que atende às suas necessidades específicas.
+Nossa equipe especializada desenvolveu uma solução completa e sob medida para atender às suas necessidades específicas, garantindo excelência, pontualidade e resultados superiores.
 
 📋 DETALHES DO PROJETO:
-• Serviço Solicitado: ${formData.serviceType}
+• Escopo: ${formData.projectDescription}
+• Prazo de Entrega: ${formData.deadline}
 • Investimento Total: R$ ${parseFloat(formData.value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-• Cronograma: ${formData.deadline}
+
+${formData.additionalPoints ? `✅ DIFERENCIAIS INCLUSOS:
+${formData.additionalPoints.split(',').map(point => '• ' + point.trim()).join('\n')}
+
+` : ''}💼 NOSSA METODOLOGIA:
+1. Análise detalhada dos requisitos e objetivos
+2. Desenvolvimento personalizado com foco em qualidade
+3. Testes rigorosos para garantir perfeito funcionamento
+4. Entrega dentro do prazo com suporte dedicado
+
+🤝 PRÓXIMOS PASSOS:
+Caso esta proposta atenda às suas expectativas, podemos agendar uma reunião para discutir os detalhes e iniciar o projeto o quanto antes.
 
 Atenciosamente,
 Equipe PitchBot
 
 ---
 Proposta gerada com IA GPT ✨`
-        : `Prezado(a) ${formData.clientName},
+            : `Prezado(a) ${formData.clientName},
 
-É com grande satisfação que apresentamos nossa proposta para ${formData.serviceType}.
+É com grande satisfação que apresentamos nossa proposta para o projeto de ${formData.projectDescription}.
 
 DETALHES DO PROJETO:
-• Serviço: ${formData.serviceType}
-• Valor do Investimento: R$ ${formData.value}
+• Projeto: ${formData.projectDescription}
+• Valor do Investimento: R$ ${parseFloat(formData.value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
 • Prazo de Entrega: ${formData.deadline}
+${formData.additionalPoints ? `\nPONTOS ADICIONAIS:\n${formData.additionalPoints}` : ''}
 
 NOSSA PROPOSTA:
-Desenvolvemos soluções personalizadas que atendem às suas necessidades específicas.
+Desenvolvemos soluções personalizadas que atendem às suas necessidades específicas, seguindo as melhores práticas do mercado e garantindo qualidade excepcional.
 
 Atenciosamente,
 Equipe PitchBot
 
 ---
 Proposta gerada em modo simulação 🎭`,
-      createdAt: new Date().toLocaleDateString('pt-BR'),
-      generatedWith: currentApiKey && currentApiKey.startsWith('sk-') ? 'gpt' : 'simulation'
+          createdAt: new Date().toLocaleDateString('pt-BR'),
+          generatedWith: currentApiKey && currentApiKey.startsWith('sk-') ? 'gpt' : 'simulation'
+        }
+        
+        setProposals(prev => [newProposal, ...prev])
+      }
+      
+    } catch (error) {
+      console.error('Erro ao gerar proposta:', error)
+      alert('Ocorreu um erro ao gerar a proposta. Por favor, tente novamente.')
+    } finally {
+      // Limpar formulário e finalizar estado de carregamento
+      setFormData({ 
+        clientName: '', 
+        projectDescription: '', 
+        additionalPoints: '', 
+        value: '', 
+        deadline: '',
+        showAdditionalPoints: false  // Reset to collapsed state after submission
+      })
+      setIsGenerating(false)
     }
-    
-    setProposals(prev => [newProposal, ...prev])
-    setFormData({ clientName: '', serviceType: '', value: '', deadline: '' })
-    setIsGenerating(false)
   }
 
   const deleteProposal = (id) => {
@@ -136,34 +232,104 @@ Proposta gerada em modo simulação 🎭`,
                   </div>
                   <div className="card-body">
                     <form onSubmit={(e) => { e.preventDefault(); generateProposal(); }}>
-                      <div className="form-grid">
+                      <div className="form-grid" style={{display: "flex", flexDirection: "column", gap: "1rem"}}>
+                        {/* Informações básicas */}
+                        <div className="form-grid-3-cols">
+                          <div className="form-group">
+                            <label htmlFor="clientName" className="form-label">Nome do Cliente</label>
+                            <input
+                              type="text" id="clientName" name="clientName" value={formData.clientName}
+                              onChange={handleInputChange} className="form-input" placeholder="Ex: João Silva" required
+                            />
+                          </div>
+                          <div className="form-group">
+                            <label htmlFor="value" className="form-label">Valor (R$)</label>
+                            <input
+                              type="number" id="value" name="value" value={formData.value}
+                              onChange={handleInputChange} className="form-input" placeholder="5000" min="0" step="0.01" required
+                            />
+                          </div>
+                          <div className="form-group">
+                            <label htmlFor="deadline" className="form-label">Prazo de Entrega</label>
+                            <input
+                              type="text" id="deadline" name="deadline" value={formData.deadline}
+                              onChange={handleInputChange} className="form-input" placeholder="Ex: 30 dias" required
+                            />
+                          </div>
+                        </div>
+                        
+                        {/* Descrição do projeto - campo maior */}
                         <div className="form-group">
-                          <label htmlFor="clientName" className="form-label">Nome do Cliente</label>
-                          <input
-                            type="text" id="clientName" name="clientName" value={formData.clientName}
-                            onChange={handleInputChange} className="form-input" placeholder="Ex: João Silva" required
+                          <label htmlFor="projectDescription" className="form-label">Descrição do Projeto</label>
+                          <textarea
+                            id="projectDescription" name="projectDescription" value={formData.projectDescription}
+                            onChange={handleInputChange} className="form-input" 
+                            placeholder="Descreva o projeto em detalhes. Ex: Desenvolvimento de website institucional com 5 páginas, área de blog e formulário de contato."
+                            style={{minHeight: "120px", resize: "vertical"}} required
                           />
                         </div>
+                        
+                        {/* Pontos adicionais - campo maior (colapsável) */}
                         <div className="form-group">
-                          <label htmlFor="serviceType" className="form-label">Tipo de Serviço</label>
-                          <input
-                            type="text" id="serviceType" name="serviceType" value={formData.serviceType}
-                            onChange={handleInputChange} className="form-input" placeholder="Ex: Desenvolvimento de Website" required
-                          />
-                        </div>
-                        <div className="form-group">
-                          <label htmlFor="value" className="form-label">Valor (R$)</label>
-                          <input
-                            type="number" id="value" name="value" value={formData.value}
-                            onChange={handleInputChange} className="form-input" placeholder="5000" min="0" step="0.01" required
-                          />
-                        </div>
-                        <div className="form-group">
-                          <label htmlFor="deadline" className="form-label">Prazo de Entrega</label>
-                          <input
-                            type="text" id="deadline" name="deadline" value={formData.deadline}
-                            onChange={handleInputChange} className="form-input" placeholder="Ex: 30 dias" required
-                          />
+                          <div 
+                            onClick={() => setFormData(prev => ({...prev, showAdditionalPoints: !prev.showAdditionalPoints}))} 
+                            style={{
+                              display: "flex",
+                              alignItems: "center", 
+                              cursor: "pointer",
+                              marginBottom: "0.5rem",
+                              padding: "0.5rem",
+                              borderRadius: "4px",
+                              background: "linear-gradient(to right, rgba(var(--primary-blue-rgb), 0.05), transparent)",
+                              transition: "all 0.3s ease"
+                            }}
+                          >
+                            <label htmlFor="additionalPoints" className="form-label" style={{
+                              margin: 0, 
+                              cursor: "pointer",
+                              fontWeight: "600",
+                              color: "var(--primary-blue)"
+                            }}>
+                              Pontos Adicionais <span style={{fontSize: "0.8em", fontWeight: "normal"}}>(opcional)</span>
+                            </label>
+                            <div style={{
+                              marginLeft: "auto",
+                              width: "24px",
+                              height: "24px",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              borderRadius: "50%",
+                              background: "var(--primary-blue)",
+                              color: "white",
+                              transform: formData.showAdditionalPoints ? "rotate(180deg)" : "rotate(0deg)",
+                              transition: "transform 0.4s ease"
+                            }}>
+                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                                <path d="M7.247 11.14 2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z"/>
+                              </svg>
+                            </div>
+                          </div>
+                          
+                          <div style={{
+                            maxHeight: formData.showAdditionalPoints ? "500px" : "0",
+                            overflow: "hidden",
+                            transition: "max-height 0.5s ease-in-out, opacity 0.4s ease-in-out, transform 0.4s ease-in-out",
+                            opacity: formData.showAdditionalPoints ? 1 : 0,
+                            transform: formData.showAdditionalPoints ? "translateY(0)" : "translateY(-10px)"
+                          }}>
+                            <textarea
+                              id="additionalPoints" name="additionalPoints" value={formData.additionalPoints}
+                              onChange={handleInputChange} className="form-input" 
+                              placeholder="Liste os diferenciais e benefícios inclusos na proposta. Ex: Design responsivo, Otimização SEO, 3 meses de suporte gratuito, Treinamento da equipe"
+                              style={{
+                                minHeight: "150px", 
+                                resize: "vertical",
+                                border: "1px solid var(--primary-blue)",
+                                boxShadow: "0 2px 8px rgba(var(--primary-blue-rgb), 0.15)"
+                              }}
+                            />
+                          </div>
                         </div>
                       </div>
                       
@@ -199,8 +365,8 @@ Proposta gerada em modo simulação 🎭`,
                             <div className="proposal-info">
                               <h4>{proposal.clientName}</h4>
                               <div className="proposal-meta">
-                                <span>💼 {proposal.serviceType}</span>
-                                <span>💰 R$ {proposal.value}</span>
+                                <span title={proposal.projectDescription}>📝 {proposal.projectDescription.length > 30 ? proposal.projectDescription.substring(0, 30) + '...' : proposal.projectDescription}</span>
+                                <span>💰 R$ {parseFloat(proposal.value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                                 <span>⏰ {proposal.deadline}</span>
                                 <span>📅 {proposal.createdAt}</span>
                                 {proposal.generatedWith === 'gpt' && <span>🤖 GPT</span>}
@@ -213,7 +379,7 @@ Proposta gerada em modo simulação 🎭`,
                               <button className="action-btn delete" title="Deletar" onClick={() => deleteProposal(proposal.id)}>🗑️</button>
                             </div>
                           </div>
-                          <div className="proposal-content">{proposal.content}</div>
+                          <div className="proposal-content" style={{ whiteSpace: "pre-wrap" }}>{proposal.content}</div>
                         </div>
                       </div>
                     ))
@@ -254,6 +420,46 @@ Proposta gerada em modo simulação 🎭`,
                             ⚠️ Nenhuma chave API configurada no arquivo .env.
                           </span>
                         )}
+                      </div>
+                    </div>
+                    
+                    <div className="form-group" style={{ marginTop: '1rem' }}>
+                      <label className="form-label">Status da API Flask</label>
+                      <div style={{ 
+                        fontSize: '0.875rem', 
+                        padding: '1rem', 
+                        backgroundColor: 'var(--gray-50)', 
+                        borderRadius: 'var(--radius)', 
+                        border: '1px solid var(--gray-200)',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center'
+                      }}>
+                        <span style={{ 
+                          color: apiStatus.status === 'online' ? 'var(--primary-blue)' : 
+                                 apiStatus.status === 'checking' ? 'var(--gray-600)' : 
+                                 'var(--accent-orange)', 
+                          fontWeight: 'bold' 
+                        }}>
+                          {apiStatus.status === 'online' ? '✅ ' : 
+                           apiStatus.status === 'checking' ? '⏳ ' : 
+                           '⚠️ '}
+                          {apiStatus.message}
+                        </span>
+                        <button 
+                          onClick={checkApiStatus}
+                          className="btn btn-sm"
+                          style={{
+                            backgroundColor: 'var(--gray-200)',
+                            padding: '0.25rem 0.75rem',
+                            borderRadius: 'var(--radius)',
+                            border: 'none',
+                            cursor: 'pointer',
+                            fontSize: '0.75rem',
+                          }}
+                        >
+                          Verificar
+                        </button>
                       </div>
                     </div>
                   </div>

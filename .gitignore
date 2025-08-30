@@ -12,6 +12,9 @@ node_modules
 /.pnp
 .pnp.js
 
+# Venv
+venv/
+
 # Testing
 /coverage
 

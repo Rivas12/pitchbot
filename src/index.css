@@ -214,7 +214,7 @@ a:hover {
 }
 
 .card-body {
-  padding: 1.5rem;
+  padding: 2rem; /* Aumentado de 1.5rem para 2rem */
 }
 
 .card-footer {
@@ -226,9 +226,9 @@ a:hover {
 /* Container */
 .container {
   width: 100%;
-  max-width: 1200px;
+  max-width: 1400px; /* Aumentado de 1200px para 1400px */
   margin: 0 auto;
-  padding: 0 1rem;
+  padding: 0 1.5rem; /* Aumentado de 1rem para 1.5rem */
 }
 
 /* Grid */

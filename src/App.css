@@ -75,7 +75,7 @@
 
 .main-content {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 57.5% 42.5%; /* Ajustado para "Criar Nova Proposta" ter 15% a mais */
   gap: 3rem;
   align-items: start;
 }
@@ -98,6 +98,9 @@
 .form-card {
   position: sticky;
   top: 6rem;
+  max-width: 100%;
+  box-shadow: var(--shadow-lg);
+  transition: all 0.3s ease;
 }
 
 .form-card .card-header h3 {
@@ -137,6 +140,7 @@
   transition: all 0.3s ease;
   position: relative;
   overflow: hidden;
+  cursor: pointer;
 }
 
 .generate-btn::before {
@@ -147,20 +151,25 @@
   width: 100%;
   height: 100%;
   background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
-  transition: left 0.5s;
+  transition: left 1s ease;
 }
 
-.generate-btn:hover {
+.generate-btn:not(:disabled):hover {
   transform: translateY(-2px);
   box-shadow: var(--shadow-xl);
 }
 
-.generate-btn:hover::before {
+.generate-btn:not(:disabled):hover::before {
   left: 100%;
 }
 
-.generate-btn:active {
+.generate-btn:not(:disabled):active {
   transform: translateY(0);
+}
+
+.generate-btn:disabled {
+  background: linear-gradient(135deg, #93c5fd, #60a5fa);
+  cursor: not-allowed;
 }
 
 /* Proposals list */
@@ -213,6 +222,7 @@
 
 .proposal-meta {
   display: flex;
+  flex-wrap: wrap;
   gap: 1rem;
   font-size: 0.875rem;
   color: var(--gray-500);
@@ -222,6 +232,10 @@
   display: flex;
   align-items: center;
   gap: 0.25rem;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .proposal-actions {
@@ -330,8 +344,8 @@
   margin-top: -12px;
   width: 24px;
   height: 24px;
-  border: 2px solid transparent;
-  border-top: 2px solid currentColor;
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  border-top: 3px solid white;
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -418,6 +432,21 @@
 }
 
 /* Responsive design */
+@media (max-width: 1200px) {
+  .main-content {
+    grid-template-columns: 57.5% 42.5%; /* Manter a proporção mesmo em telas médias */
+    gap: 2rem;
+  }
+  
+  .form-card {
+    position: static;
+  }
+  
+  .form-grid-3-cols {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
 @media (max-width: 1024px) {
   .main-content {
     grid-template-columns: 1fr;
@@ -427,6 +456,17 @@
   .form-card {
     position: static;
   }
+  
+  .form-grid-3-cols {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* Adicionado classe para grid de 3 colunas */
+.form-grid-3-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 1rem;
 }
 
 @media (max-width: 768px) {
@@ -444,6 +484,10 @@
   }
   
   .form-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .form-grid-3-cols {
     grid-template-columns: 1fr;
   }
   
