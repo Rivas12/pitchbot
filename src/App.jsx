@@ -6,6 +6,7 @@ import './App.css'
 function App() {
   const [activeTab, setActiveTab] = useState('home')
   const [proposals, setProposals] = useState([])
+  const [projects, setProjects] = useState([])
   const [isGenerating, setIsGenerating] = useState(false)
   // Status da API Flask
   const [apiStatus, setApiStatus] = useState({ status: 'checking', message: 'Verificando conexão...' })
@@ -22,8 +23,18 @@ function App() {
     additionalPoints: '',
     value: '',
     deadline: '',
-    showAdditionalPoints: false
+    showAdditionalPoints: false,
+    projectId: ''
   })
+  
+  // Estado para o formulário de projeto
+  const [projectForm, setProjectForm] = useState({
+    name: '',
+    description: ''
+  })
+  
+  // Estado para controlar quais projetos estão expandidos
+  const [expandedProjects, setExpandedProjects] = useState({})
   
   // Estado para controlar quais propostas estão expandidas
   const [expandedProposals, setExpandedProposals] = useState({})
@@ -35,6 +46,7 @@ function App() {
     // Carregar propostas do banco de dados quando o componente for montado
     if (apiStatus.status === 'online' || apiStatus.status === 'checking') {
       fetchProposals()
+      fetchProjects()
     }
     
     // Verificar o status da API a cada 30 segundos
@@ -50,6 +62,7 @@ function App() {
   useEffect(() => {
     if (apiStatus.status === 'online') {
       fetchProposals()
+      fetchProjects()
     }
   }, [apiStatus.status])
   
@@ -72,6 +85,14 @@ function App() {
   // Função para alternar o estado de expansão de uma proposta
   const toggleProposal = (id) => {
     setExpandedProposals(prev => ({
+      ...prev,
+      [id]: !prev[id]
+    }))
+  }
+  
+  // Função para alternar o estado de expansão de um projeto
+  const toggleProject = (id) => {
+    setExpandedProjects(prev => ({
       ...prev,
       [id]: !prev[id]
     }))
@@ -127,6 +148,7 @@ function App() {
             additionalPoints: formData.additionalPoints,
             value: formData.value,
             deadline: formData.deadline,
+            projectId: formData.projectId || null,
           }),
         })
         
@@ -145,7 +167,8 @@ function App() {
             content: serverProposal.content,
             createdAt: new Date(serverProposal.createdAt).toLocaleDateString('pt-BR'),
             generatedWith: serverProposal.generatedWith,
-            author: serverProposal.author
+            author: serverProposal.author,
+            projectId: serverProposal.projectId
           }
           
           setProposals(prev => [newProposal, ...prev])
@@ -231,7 +254,8 @@ Proposta gerada em modo simulação 🎭`,
         additionalPoints: '', 
         value: '', 
         deadline: '',
-        showAdditionalPoints: false  // Reset to collapsed state after submission
+        showAdditionalPoints: false,  // Reset to collapsed state after submission
+        projectId: ''
       })
       setIsGenerating(false)
     }
@@ -368,8 +392,89 @@ Proposta gerada em modo simulação 🎭`,
     }
   }
 
-  // Funções de gerenciamento de chave API removidas, 
-  // já que usamos apenas a chave do arquivo .env
+  // Função para buscar projetos
+  const fetchProjects = async () => {
+    try {
+      const response = await fetch('http://localhost:5000/api/projects')
+      const data = await response.json()
+      
+      if (data.success && Array.isArray(data.projects)) {
+        setProjects(data.projects)
+      } else {
+        console.error('Erro ao buscar projetos:', data.error)
+      }
+    } catch (error) {
+      console.error('Erro ao buscar projetos:', error)
+      toast.error('Não foi possível carregar os projetos do servidor.')
+    }
+  }
+
+  // Função para criar um novo projeto
+  const createProject = async (e) => {
+    e.preventDefault()
+    
+    if (!projectForm.name || !projectForm.description) {
+      toast.error('Preencha todos os campos do projeto')
+      return
+    }
+    
+    try {
+      const response = await fetch('http://localhost:5000/api/projects', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: projectForm.name,
+          description: projectForm.description,
+        }),
+      })
+      
+      const data = await response.json()
+      
+      if (data.success) {
+        // Adiciona o novo projeto à lista
+        setProjects(prev => [data.project, ...prev])
+        
+        // Limpa o formulário
+        setProjectForm({
+          name: '',
+          description: ''
+        })
+        
+        toast.success('Projeto criado com sucesso!')
+      } else {
+        toast.error(`Erro ao criar projeto: ${data.error}`)
+      }
+    } catch (error) {
+      console.error('Erro ao criar projeto:', error)
+      toast.error('Ocorreu um erro ao criar o projeto.')
+    }
+  }
+  
+  // Função para deletar um projeto
+  const deleteProject = async (id) => {
+    if (window.confirm('Tem certeza que deseja deletar este projeto?')) {
+      try {
+        const response = await fetch(`http://localhost:5000/api/projects/${id}`, {
+          method: 'DELETE'
+        })
+        
+        const data = await response.json()
+        
+        if (data.success) {
+          // Remover da lista local
+          setProjects(prev => prev.filter(p => p.id !== id))
+          toast.info('Projeto deletado com sucesso')
+        } else {
+          toast.error(`Erro ao deletar: ${data.error || 'Erro desconhecido'}`)
+        }
+      } catch (error) {
+        console.error('Erro ao deletar projeto:', error)
+        toast.error('Erro ao comunicar com o servidor. Tente novamente.')
+      }
+    }
+  }
 
   return (
     <div className="app">
@@ -405,6 +510,9 @@ Proposta gerada em modo simulação 🎭`,
               </a>
               <a href="#" className={`nav-link ${activeTab === 'proposals' ? 'active' : ''}`} onClick={() => setActiveTab('proposals')}>
                 Propostas
+              </a>
+              <a href="#" className={`nav-link ${activeTab === 'projects' ? 'active' : ''}`} onClick={() => setActiveTab('projects')}>
+                Projetos
               </a>
               <a href="#" className={`nav-link ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => setActiveTab('settings')}>
                 Configurações
@@ -532,9 +640,55 @@ Proposta gerada em modo simulação 🎭`,
                                 minHeight: "150px", 
                                 resize: "vertical",
                                 border: "1px solid var(--primary-blue)",
-                                boxShadow: "0 2px 8px rgba(var(--primary-blue-rgb), 0.15)"
+                                boxShadow: "0 2px 8px rgba(var(--primary-blue-rgb), 0.15)",
+                                marginBottom: "1rem"
                               }}
                             />
+                            
+                            <div className="form-group">
+                              <label htmlFor="projectId" className="form-label" style={{
+                                fontWeight: "600",
+                                color: "var(--primary-blue)"
+                              }}>
+                                Selecionar projeto cadastrado:
+                              </label>
+                              <select
+                                id="projectId"
+                                name="projectId"
+                                value={formData.projectId}
+                                onChange={handleInputChange}
+                                className="form-input"
+                                style={{
+                                  border: "1px solid var(--primary-blue)",
+                                  boxShadow: "0 2px 8px rgba(var(--primary-blue-rgb), 0.15)"
+                                }}
+                              >
+                                <option value="">-- Selecione um projeto --</option>
+                                {projects.map(project => (
+                                  <option key={project.id} value={project.id}>
+                                    {project.name}
+                                  </option>
+                                ))}
+                              </select>
+                              {formData.projectId && (
+                                <div style={{ 
+                                  padding: "0.5rem",
+                                  fontSize: "0.875rem",
+                                  marginTop: "0.5rem",
+                                  backgroundColor: "rgba(var(--primary-blue-rgb), 0.05)",
+                                  borderRadius: "4px"
+                                }}>
+                                  {projects.find(p => p.id === parseInt(formData.projectId))?.description}
+                                </div>
+                              )}
+                              <div style={{ 
+                                fontSize: "0.8rem", 
+                                color: "var(--gray-500)",
+                                marginTop: "0.5rem"
+                              }}>
+                                Você pode adicionar novos projetos na aba "Projetos"
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -782,6 +936,240 @@ Proposta gerada em modo simulação 🎭`,
                     </div>
                   ))
                 )}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'projects' && (
+            <div className="projects-management-section">
+              <h1 className="section-title">📋 Gerenciamento de Projetos</h1>
+              <p className="section-subtitle">Cadastre e gerencie seus projetos para reutilização em propostas</p>
+              
+              <div className="grid" style={{ 
+                display: 'grid', 
+                gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', 
+                gap: '2rem',
+                gridAutoRows: 'auto'
+              }}>
+                <div className="card">
+                  <div className="card-header">
+                    <h3>Adicionar Novo Projeto</h3>
+                    <p>Cadastre um novo projeto para uso em propostas</p>
+                  </div>
+                  <div className="card-body">
+                    <form onSubmit={createProject}>
+                      <div className="form-group">
+                        <label htmlFor="projectName" className="form-label">Nome do Projeto</label>
+                        <input
+                          type="text"
+                          id="projectName"
+                          value={projectForm.name}
+                          onChange={(e) => setProjectForm(prev => ({ ...prev, name: e.target.value }))}
+                          className="form-input"
+                          placeholder="Ex: Website Institucional"
+                          required
+                        />
+                      </div>
+                      
+                      <div className="form-group">
+                        <label htmlFor="projectDescription" className="form-label">Descrição do Projeto</label>
+                        <textarea
+                          id="projectDescription"
+                          value={projectForm.description}
+                          onChange={(e) => setProjectForm(prev => ({ ...prev, description: e.target.value }))}
+                          className="form-input"
+                          placeholder="Descreva o projeto em detalhes. Esta descrição será incluída nas propostas quando o projeto for selecionado."
+                          style={{ minHeight: "120px", resize: "vertical" }}
+                          required
+                        />
+                      </div>
+                      
+                      <button type="submit" className="btn btn-primary">
+                        💾 Salvar Projeto
+                      </button>
+                    </form>
+                  </div>
+                </div>
+
+                <div className="card">
+                  <div className="card-header">
+                    <h3>Projetos Cadastrados</h3>
+                    <p>Lista de projetos disponíveis para uso em propostas</p>
+                  </div>
+                  <div className="card-body">
+                    {projects.length === 0 ? (
+                      <div className="empty-state" style={{ padding: '1rem 0' }}>
+                        <div className="empty-state-icon">📋</div>
+                        <h3>Nenhum projeto cadastrado</h3>
+                        <p>Adicione seu primeiro projeto usando o formulário ao lado</p>
+                      </div>
+                    ) : (
+                      <div className="projects-list" style={{ 
+                        display: 'flex', 
+                        flexDirection: 'column',
+                        gap: '1rem'
+                      }}>
+                        {projects.map(project => (
+                          <div 
+                            key={project.id} 
+                            className="project-item"
+                            style={{
+                              padding: '1rem',
+                              borderRadius: 'var(--radius)',
+                              border: '1px solid var(--gray-200)',
+                              backgroundColor: 'var(--gray-50)',
+                              position: 'relative',
+                              transition: 'all 0.3s ease',
+                              cursor: 'pointer',
+                              boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+                              transform: 'translateY(0)',
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.transform = 'translateY(-3px)';
+                              e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.1)';
+                              e.currentTarget.style.borderColor = 'var(--primary-blue)';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.transform = 'translateY(0)';
+                              e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.05)';
+                              e.currentTarget.style.borderColor = 'var(--gray-200)';
+                            }}
+                          >
+                            <div style={{ 
+                              position: 'absolute', 
+                              top: '0.75rem', 
+                              right: '0.75rem',
+                              display: 'flex',
+                              gap: '0.5rem',
+                              zIndex: 5
+                            }}>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  deleteProject(project.id);
+                                }}
+                                style={{
+                                  background: 'rgba(255, 255, 255, 0.9)',
+                                  border: '1px solid var(--gray-200)',
+                                  borderRadius: '50%',
+                                  width: '28px',
+                                  height: '28px',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  cursor: 'pointer',
+                                  color: 'var(--accent-orange)',
+                                  fontSize: '0.9rem',
+                                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                                }}
+                                title="Deletar projeto"
+                              >
+                                🗑️
+                              </button>
+                              <div 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleProject(project.id);
+                                }}
+                                style={{
+                                  width: "28px",
+                                  height: "28px",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  borderRadius: "50%",
+                                  background: "var(--primary-blue)",
+                                  color: "white",
+                                  transform: expandedProjects[project.id] ? "rotate(180deg)" : "rotate(0deg)",
+                                  transition: "transform 0.4s ease",
+                                  cursor: "pointer",
+                                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                                }}
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                                  <path d="M7.247 11.14 2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z"/>
+                                </svg>
+                              </div>
+                            </div>
+                            
+                            <div 
+                              onClick={() => toggleProject(project.id)}
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                marginBottom: "0.5rem",
+                                paddingRight: "80px" /* Espaço para os botões */
+                              }}
+                            >
+                              <h4 style={{ 
+                                margin: '0',
+                                color: 'var(--primary-blue)',
+                                fontSize: '1.1rem',
+                                flex: '1',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap'
+                              }}>
+                                {project.name}
+                              </h4>
+                            </div>
+                            
+                            <div style={{
+                              maxHeight: expandedProjects[project.id] ? "1000px" : "0",
+                              overflow: "hidden",
+                              transition: "max-height 0.5s ease-in-out, opacity 0.4s ease-in-out, transform 0.4s ease-in-out",
+                              opacity: expandedProjects[project.id] ? 1 : 0,
+                              transform: expandedProjects[project.id] ? "translateY(0)" : "translateY(-10px)"
+                            }}>
+                              <p style={{ 
+                                margin: '0',
+                                fontSize: '0.875rem',
+                                color: 'var(--gray-700)',
+                                whiteSpace: 'pre-wrap',
+                                padding: '0.5rem',
+                                backgroundColor: 'rgba(var(--primary-blue-rgb), 0.05)',
+                                borderRadius: '4px'
+                              }}>
+                                {project.description}
+                              </p>
+                              
+                              <div style={{ 
+                                marginTop: '1rem',
+                                fontSize: '0.75rem',
+                                color: 'var(--gray-500)'
+                              }}>
+                                Criado em: {new Date(project.created_at).toLocaleDateString('pt-BR')}
+                              </div>
+                            </div>
+                            
+                            {!expandedProjects[project.id] && (
+                              <div style={{
+                                fontSize: '0.875rem',
+                                color: 'var(--gray-600)',
+                                marginTop: '0.5rem',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '0.25rem'
+                              }}>
+                                <span style={{
+                                  display: 'inline-block',
+                                  maxWidth: '100%',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap'
+                                }}>
+                                  {project.description.length > 50 
+                                    ? project.description.substring(0, 50) + '...' 
+                                    : project.description}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           )}

@@ -40,7 +40,18 @@ def init_db():
         content TEXT NOT NULL,
         created_at TEXT NOT NULL,
         author TEXT NOT NULL,
-        model TEXT NOT NULL
+        model TEXT NOT NULL,
+        project_id INTEGER
+    )
+    ''')
+    
+    # Criação da tabela de projetos
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS projects (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        description TEXT NOT NULL,
+        created_at TEXT NOT NULL
     )
     ''')
     
@@ -70,6 +81,22 @@ def generate_proposal():
                 'success': False,
                 'error': f'Campo obrigatório ausente: {field}'
             }), 400
+            
+    # Verificar se um projeto foi selecionado
+    project_id = data.get('projectId')
+    project_description = ""
+    
+    if project_id:
+        # Buscar informações do projeto selecionado
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM projects WHERE id = ?', (project_id,))
+        project = cursor.fetchone()
+        conn.close()
+        
+        if project:
+            project_description = f"Projeto: {project['name']} - {project['description']}"
     
     # Sempre use uma chave API - priorize a do cliente, depois a do ambiente, ou use uma padrão
     api_key = data.get('apiKey') or openai.api_key or os.environ.get('DEFAULT_OPENAI_API_KEY')
@@ -109,6 +136,7 @@ def generate_proposal():
                 'deadline': data['deadline'],
                 'additionalPoints': data.get('additionalPoints', ''),
                 'customPrompt': data.get('customPrompt', ''),
+                'projectId': data.get('projectId'),
                 'content': proposal_content,
                 'generatedWith': 'gpt',
                 'author': PROPOSAL_AUTHOR,
@@ -214,6 +242,10 @@ Assine como autor fornecido no final do texto, indicando que é um freelancer pr
     if additional_points:
         prompt += f"\n\n{tag_bold_open}PONTOS ADICIONAIS:{tag_bold_close} {additional_points}"
     
+    # Adiciona informações do projeto selecionado, se houver
+    if project_description:
+        prompt += f"\n\n{tag_bold_open}PROJETO SELECIONADO:{tag_bold_close} {project_description}"
+    
     if custom_prompt:
         prompt += f"\n\n{tag_bold_open}INSTRUÇÕES:{tag_bold_close} {custom_prompt}"
     
@@ -288,13 +320,14 @@ Atenciosamente,
         custom_prompt=custom_prompt,
         content=content,
         author=PROPOSAL_AUTHOR,
-        model=model_name
+        model=model_name,
+        project_id=data.get('projectId')
     )
     
     return content
 
 def save_proposal(client_name, project_description, value, deadline, 
-                additional_points, custom_prompt, content, author, model):
+                additional_points, custom_prompt, content, author, model, project_id=None):
     """Salva uma proposta no banco de dados SQLite"""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
@@ -304,11 +337,11 @@ def save_proposal(client_name, project_description, value, deadline,
     cursor.execute('''
     INSERT INTO proposals (
         client_name, project_description, value, deadline, 
-        additional_points, custom_prompt, content, created_at, author, model
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        additional_points, custom_prompt, content, created_at, author, model, project_id
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ''', (
         client_name, project_description, value, deadline,
-        additional_points, custom_prompt, content, created_at, author, model
+        additional_points, custom_prompt, content, created_at, author, model, project_id
     ))
     
     proposal_id = cursor.lastrowid
@@ -417,6 +450,150 @@ def delete_proposal(proposal_id):
     return jsonify({
         'success': True,
         'message': f'Proposta {proposal_id} deletada com sucesso'
+    })
+
+# Rotas para projetos
+@app.route('/api/projects', methods=['GET'])
+def list_projects():
+    """Lista todos os projetos salvos"""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    
+    cursor.execute('SELECT * FROM projects ORDER BY created_at DESC')
+    rows = cursor.fetchall()
+    
+    projects = [dict(row) for row in rows]
+    conn.close()
+    
+    return jsonify({
+        'success': True,
+        'projects': projects
+    })
+
+@app.route('/api/projects', methods=['POST'])
+def create_project():
+    """Cria um novo projeto"""
+    data = request.json
+    
+    # Validação básica
+    if not data.get('name') or not data.get('description'):
+        return jsonify({
+            'success': False,
+            'error': 'Nome e descrição do projeto são obrigatórios'
+        }), 400
+    
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    created_at = datetime.datetime.now().isoformat()
+    
+    cursor.execute('''
+    INSERT INTO projects (name, description, created_at)
+    VALUES (?, ?, ?)
+    ''', (data['name'], data['description'], created_at))
+    
+    project_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    
+    return jsonify({
+        'success': True,
+        'project': {
+            'id': project_id,
+            'name': data['name'],
+            'description': data['description'],
+            'created_at': created_at
+        }
+    })
+
+@app.route('/api/projects/<int:project_id>', methods=['GET'])
+def get_project(project_id):
+    """Recupera um projeto específico pelo ID"""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    
+    cursor.execute('SELECT * FROM projects WHERE id = ?', (project_id,))
+    row = cursor.fetchone()
+    
+    if not row:
+        conn.close()
+        return jsonify({
+            'success': False,
+            'error': 'Projeto não encontrado'
+        }), 404
+    
+    project = dict(row)
+    conn.close()
+    
+    return jsonify({
+        'success': True,
+        'project': project
+    })
+
+@app.route('/api/projects/<int:project_id>', methods=['PUT'])
+def update_project(project_id):
+    """Atualiza um projeto existente"""
+    data = request.json
+    
+    # Validação básica
+    if not data.get('name') or not data.get('description'):
+        return jsonify({
+            'success': False,
+            'error': 'Nome e descrição do projeto são obrigatórios'
+        }), 400
+    
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    cursor.execute('SELECT id FROM projects WHERE id = ?', (project_id,))
+    if not cursor.fetchone():
+        conn.close()
+        return jsonify({
+            'success': False,
+            'error': 'Projeto não encontrado'
+        }), 404
+    
+    cursor.execute('''
+    UPDATE projects 
+    SET name = ?, description = ?
+    WHERE id = ?
+    ''', (data['name'], data['description'], project_id))
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({
+        'success': True,
+        'project': {
+            'id': project_id,
+            'name': data['name'],
+            'description': data['description']
+        }
+    })
+
+@app.route('/api/projects/<int:project_id>', methods=['DELETE'])
+def delete_project(project_id):
+    """Deleta um projeto específico pelo ID"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    cursor.execute('SELECT id FROM projects WHERE id = ?', (project_id,))
+    if not cursor.fetchone():
+        conn.close()
+        return jsonify({
+            'success': False,
+            'error': 'Projeto não encontrado'
+        }), 404
+    
+    cursor.execute('DELETE FROM projects WHERE id = ?', (project_id,))
+    conn.commit()
+    conn.close()
+    
+    return jsonify({
+        'success': True,
+        'message': f'Projeto {project_id} deletado com sucesso'
     })
 
 if __name__ == '__main__':
