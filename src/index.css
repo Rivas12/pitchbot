@@ -52,20 +52,22 @@ html {
 }
 
 body {
-  background-color: var(--gray-50);
-  color: var(--gray-800);
+  background-color: var(--bg-main, var(--gray-50));
+  color: var(--text-main, var(--gray-800));
   font-size: 16px;
   line-height: 1.6;
   min-height: 100vh;
   overflow-x: hidden;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 /* Typography */
 h1, h2, h3, h4, h5, h6 {
   font-weight: 600;
-  color: var(--gray-900);
+  color: var(--text-main, var(--gray-900));
   line-height: 1.2;
   margin-bottom: 0.5rem;
+  transition: color 0.3s ease;
 }
 
 h1 { font-size: 2.5rem; }
@@ -169,8 +171,9 @@ a:hover {
   display: block;
   font-size: 0.875rem;
   font-weight: 500;
-  color: var(--gray-700);
+  color: var(--text-secondary, var(--gray-700));
   margin-bottom: 0.5rem;
+  transition: color 0.3s ease;
 }
 
 .form-input {
@@ -179,13 +182,13 @@ a:hover {
   padding: 0.75rem;
   font-size: 1rem;
   line-height: 1.5;
-  color: var(--gray-900);
-  background-color: var(--white);
+  color: var(--text-main, var(--gray-900));
+  background-color: var(--bg-card, var(--white));
   background-image: none;
-  border: 1px solid var(--gray-300);
+  border: 1px solid var(--border-color, var(--gray-300));
   border-radius: var(--radius);
   box-shadow: var(--shadow-sm);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.3s ease, color 0.3s ease;
 }
 
 .form-input:focus {
@@ -200,21 +203,24 @@ a:hover {
 
 /* Cards */
 .card {
-  background-color: var(--white);
-  border: 1px solid var(--gray-200);
+  background-color: var(--bg-card, var(--white));
+  border: 1px solid var(--border-color, var(--gray-200));
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow);
   overflow: hidden;
+  transition: all 0.3s ease;
 }
 
 .card-header {
   padding: 1.5rem;
-  border-bottom: 1px solid var(--gray-200);
-  background-color: var(--gray-50);
+  border-bottom: 1px solid var(--border-color, var(--gray-200));
+  background-color: var(--bg-card, var(--gray-50));
+  transition: all 0.3s ease;
 }
 
 .card-body {
   padding: 2rem; /* Aumentado de 1.5rem para 2rem */
+  transition: all 0.3s ease;
 }
 
 .card-footer {

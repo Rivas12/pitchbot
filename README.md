@@ -116,6 +116,9 @@ pitchbot/
 │   ├── .env                # Variáveis de ambiente (não versionado)
 │   ├── start_server.bat    # Script de inicialização (Windows)
 │   └── README.md           # Documentação da API
+├── start_app.bat           # Script para iniciar os servidores (Windows)
+├── start_app.sh            # Script para iniciar os servidores (Linux/Mac)
+├── START_GUIDE.md          # Guia de inicialização detalhado
 ├── public/
 │   └── vite.svg
 ├── src/
@@ -140,9 +143,16 @@ pitchbot/
 
 ## 💡 Como Usar
 
-1. **Inicie o backend Flask** usando o script `start_server.bat` ou manualmente
+1. **Modo fácil**: Use o iniciador automático `start_app.bat` (Windows) ou `start_app.sh` (Linux/Mac) e selecione a opção 3 para iniciar frontend e backend
 
-2. **Inicie o frontend React** com `npm run dev`
+   OU
+
+   Inicie manualmente:
+
+   - **Inicie o backend Flask** usando o script `backend/start_server.bat` ou manualmente
+   - **Inicie o frontend React** com `npm run dev`
+   
+   Veja o guia completo de inicialização em [START_GUIDE.md](START_GUIDE.md)
 
 3. **Preencha o formulário** com os dados do cliente:
    - Nome do cliente

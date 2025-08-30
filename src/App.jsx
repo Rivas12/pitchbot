@@ -11,6 +11,11 @@ function App() {
   const [apiStatus, setApiStatus] = useState({ status: 'checking', message: 'Verificando conexão...' })
   // Usar apenas a chave API do arquivo .env para compatibilidade
   const envApiKey = import.meta.env.VITE_OPENAI_API_KEY || ''
+  // Controle de tema (claro/escuro)
+  const [darkMode, setDarkMode] = useState(() => {
+    const savedTheme = localStorage.getItem('pitchbot-theme')
+    return savedTheme === 'dark'
+  })
   const [formData, setFormData] = useState({
     clientName: '',
     projectDescription: '',
@@ -20,30 +25,82 @@ function App() {
     showAdditionalPoints: false
   })
   
-  // Verificar status da API ao carregar
+  // Estado para controlar quais propostas estão expandidas
+  const [expandedProposals, setExpandedProposals] = useState({})
+  
+  // Verificar status da API e carregar propostas ao iniciar
   useEffect(() => {
     checkApiStatus()
+    
+    // Carregar propostas do banco de dados quando o componente for montado
+    if (apiStatus.status === 'online' || apiStatus.status === 'checking') {
+      fetchProposals()
+    }
+    
+    // Verificar o status da API a cada 30 segundos
+    const apiStatusInterval = setInterval(() => {
+      checkApiStatus()
+    }, 30000)
+    
+    // Limpar o intervalo quando o componente for desmontado
+    return () => clearInterval(apiStatusInterval)
   }, [])
+  
+  // Atualiza a lista de propostas quando o status da API mudar para online
+  useEffect(() => {
+    if (apiStatus.status === 'online') {
+      fetchProposals()
+    }
+  }, [apiStatus.status])
+  
+  // Aplicar o tema quando o estado darkMode mudar
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.classList.add('dark-theme')
+      localStorage.setItem('pitchbot-theme', 'dark')
+    } else {
+      document.documentElement.classList.remove('dark-theme')
+      localStorage.setItem('pitchbot-theme', 'light')
+    }
+  }, [darkMode])
 
   const handleInputChange = (e) => {
     const { name, value } = e.target
     setFormData(prev => ({ ...prev, [name]: value }))
   }
   
+  // Função para alternar o estado de expansão de uma proposta
+  const toggleProposal = (id) => {
+    setExpandedProposals(prev => ({
+      ...prev,
+      [id]: !prev[id]
+    }))
+  }
+  
   // Função para verificar o status da API Flask
   const checkApiStatus = async () => {
     try {
-      setApiStatus({ status: 'checking', message: 'Verificando conexão...' })
+      setApiStatus({ status: 'checking', message: 'Verificando conexão com a API...' })
       const response = await fetch('http://localhost:5000/api/health')
       const data = await response.json()
       
       if (data.status === 'online') {
-        setApiStatus({ status: 'online', message: 'API Flask conectada' })
+        const timestamp = new Date().toLocaleTimeString()
+        setApiStatus({ 
+          status: 'online', 
+          message: `API Flask conectada (verificado às ${timestamp}). Clique para verificar novamente.` 
+        })
       } else {
-        setApiStatus({ status: 'error', message: 'API Flask indisponível' })
+        setApiStatus({ 
+          status: 'error', 
+          message: 'API Flask indisponível. Verifique se o servidor está rodando corretamente.' 
+        })
       }
     } catch (error) {
-      setApiStatus({ status: 'offline', message: 'API Flask não está disponível' })
+      setApiStatus({ 
+        status: 'offline', 
+        message: 'API Flask não está disponível. Verifique se o servidor backend está em execução.' 
+      })
     }
   }
 
@@ -79,15 +136,16 @@ function App() {
           const serverProposal = result.proposal
           
           const newProposal = {
-            id: Date.now(),
+            id: serverProposal.id, // Usar o ID gerado pelo servidor
             clientName: serverProposal.clientName,
             projectDescription: serverProposal.projectDescription,
-            additionalPoints: serverProposal.additionalPoints,
+            additionalPoints: serverProposal.additionalPoints || '',
             value: serverProposal.value,
             deadline: serverProposal.deadline,
             content: serverProposal.content,
-            createdAt: new Date().toLocaleDateString('pt-BR'),
-            generatedWith: serverProposal.generatedWith
+            createdAt: new Date(serverProposal.createdAt).toLocaleDateString('pt-BR'),
+            generatedWith: serverProposal.generatedWith,
+            author: serverProposal.author
           }
           
           setProposals(prev => [newProposal, ...prev])
@@ -179,16 +237,135 @@ Proposta gerada em modo simulação 🎭`,
     }
   }
 
-  const deleteProposal = (id) => {
+  const deleteProposal = async (id) => {
     if (window.confirm('Tem certeza que deseja deletar esta proposta?')) {
-      setProposals(prev => prev.filter(p => p.id !== id))
-      toast.info('Proposta deletada com sucesso')
+      try {
+        // Tentar excluir do banco de dados se a API estiver online
+        if (apiStatus.status === 'online') {
+          const response = await fetch(`http://localhost:5000/api/proposals/${id}`, {
+            method: 'DELETE'
+          })
+          
+          const result = await response.json()
+          
+          if (result.success) {
+            // Remover da lista local apenas se for excluído com sucesso do servidor
+            setProposals(prev => prev.filter(p => p.id !== id))
+            toast.info('Proposta deletada com sucesso')
+          } else {
+            toast.error(`Erro ao deletar: ${result.error || 'Erro desconhecido'}`)
+          }
+        } else {
+          // Se a API estiver offline, apenas remover da lista local
+          setProposals(prev => prev.filter(p => p.id !== id))
+          toast.info('Proposta removida da lista local')
+        }
+      } catch (error) {
+        console.error('Erro ao deletar proposta:', error)
+        toast.error('Erro ao comunicar com o servidor. Tente novamente.')
+      }
     }
   }
 
   const copyProposal = (content) => {
     navigator.clipboard.writeText(content)
     toast.success('Proposta copiada para a área de transferência!')
+  }
+  
+  // Função para alternar o tema claro/escuro
+  const toggleTheme = (e) => {
+    if (e) {
+      // Criar efeito de transição a partir do ponto do clique
+      const appElement = document.querySelector('.app');
+      const x = e.clientX;
+      const y = e.clientY;
+      
+      // Definir o ponto de origem do efeito radial
+      appElement.style.setProperty('--x', `${x}px`);
+      appElement.style.setProperty('--y', `${y}px`);
+      
+      // Adicionar classe para a animação
+      appElement.classList.add('theme-transition');
+      
+      // Remover a classe após a animação
+      setTimeout(() => {
+        appElement.classList.remove('theme-transition');
+      }, 500);
+    }
+    
+    // Alternar o estado do tema
+    setDarkMode(prev => !prev);
+    
+    // Toaster de feedback
+    toast.info(`Tema ${!darkMode ? 'escuro' : 'claro'} ativado`, {
+      position: "bottom-right",
+      autoClose: 1500,
+      hideProgressBar: true,
+    });
+  }
+
+  // Função para buscar todas as propostas do banco de dados
+  const fetchProposals = async () => {
+    try {
+      const response = await fetch('http://localhost:5000/api/proposals')
+      const data = await response.json()
+      
+      if (data.success && Array.isArray(data.proposals)) {
+        // Formatar as propostas recebidas para o formato esperado pelo frontend
+        const formattedProposals = data.proposals.map(p => ({
+          id: p.id,
+          clientName: p.client_name,
+          projectDescription: p.project_description,
+          value: p.value,
+          deadline: p.deadline,
+          additionalPoints: p.additional_points || '',
+          content: p.content,
+          createdAt: new Date(p.created_at).toLocaleDateString('pt-BR'),
+          generatedWith: p.model.includes('gpt') ? 'gpt' : 'simulation',
+          author: p.author
+        }))
+        
+        setProposals(formattedProposals)
+      } else {
+        console.error('Erro ao buscar propostas:', data.error)
+      }
+    } catch (error) {
+      console.error('Erro ao buscar propostas:', error)
+      toast.error('Não foi possível carregar as propostas do servidor.')
+    }
+  }
+  
+  // Função para buscar propostas com filtro de pesquisa
+  const searchProposals = async (searchTerm) => {
+    if (!apiStatus.status === 'online') {
+      toast.warning('API offline. Não é possível pesquisar propostas.')
+      return
+    }
+    
+    try {
+      const response = await fetch(`http://localhost:5000/api/proposals?search=${encodeURIComponent(searchTerm)}`)
+      const data = await response.json()
+      
+      if (data.success && Array.isArray(data.proposals)) {
+        const formattedProposals = data.proposals.map(p => ({
+          id: p.id,
+          clientName: p.client_name,
+          projectDescription: p.project_description,
+          value: p.value,
+          deadline: p.deadline,
+          additionalPoints: p.additional_points || '',
+          content: p.content,
+          createdAt: new Date(p.created_at).toLocaleDateString('pt-BR'),
+          generatedWith: p.model.includes('gpt') ? 'gpt' : 'simulation',
+          author: p.author
+        }))
+        
+        setProposals(formattedProposals)
+      }
+    } catch (error) {
+      console.error('Erro na pesquisa de propostas:', error)
+      toast.error('Erro ao pesquisar propostas.')
+    }
   }
 
   // Funções de gerenciamento de chave API removidas, 
@@ -214,6 +391,13 @@ Proposta gerada em modo simulação 🎭`,
             <div className="logo">
               <div className="logo-icon">PB</div>
               PitchBot
+              <div 
+                className={`api-status-indicator ${apiStatus.status}`} 
+                title={apiStatus.message}
+                onClick={checkApiStatus}
+              >
+                <div className="pulse-dot"></div>
+              </div>
             </div>
             <nav className="nav">
               <a href="#" className={`nav-link ${activeTab === 'home' ? 'active' : ''}`} onClick={() => setActiveTab('home')}>
@@ -225,6 +409,13 @@ Proposta gerada em modo simulação 🎭`,
               <a href="#" className={`nav-link ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => setActiveTab('settings')}>
                 Configurações
               </a>
+              <button 
+                className="theme-button" 
+                onClick={toggleTheme} 
+                title={darkMode ? "Mudar para tema claro" : "Mudar para tema escuro"}
+              >
+                {darkMode ? '☀️' : '🌙'}
+              </button>
             </nav>
           </div>
         </div>
@@ -361,8 +552,7 @@ Proposta gerada em modo simulação 🎭`,
 
               <div className="proposals-section">
                 <h2 className="section-title">
-                  Propostas Recentes 
-                  {proposals.length > 0 && <span className="proposals-count">{proposals.length}</span>}
+                  Proposta Recente 
                 </h2>
                 
                 <div className="proposals-grid">
@@ -373,31 +563,68 @@ Proposta gerada em modo simulação 🎭`,
                       <p>Crie sua primeira proposta usando o formulário ao lado</p>
                     </div>
                   ) : (
-                    proposals.map((proposal) => (
-                      <div key={proposal.id} className="card proposal-card">
-                        <div className="card-body">
-                          <div className="proposal-header">
-                            <div className="proposal-info">
-                              <h4>{proposal.clientName}</h4>
-                              <div className="proposal-meta">
-                                <span title={proposal.projectDescription}>📝 {proposal.projectDescription.length > 30 ? proposal.projectDescription.substring(0, 30) + '...' : proposal.projectDescription}</span>
-                                <span>💰 R$ {parseFloat(proposal.value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                                <span>⏰ {proposal.deadline}</span>
-                                <span>📅 {proposal.createdAt}</span>
-                                {proposal.generatedWith === 'gpt' && <span>🤖 GPT</span>}
-                                {proposal.generatedWith === 'simulation' && <span>🎭 Simulação</span>}
-                              </div>
-                            </div>
-                            <div className="proposal-actions">
-                              <button className="action-btn edit" title="Editar" onClick={() => toast.info('Função de edição em desenvolvimento')}>✏️</button>
-                              <button className="action-btn copy" title="Copiar" onClick={() => copyProposal(proposal.content)}>📋</button>
-                              <button className="action-btn delete" title="Deletar" onClick={() => deleteProposal(proposal.id)}>🗑️</button>
+                    // Mostrar apenas a proposta mais recente (primeiro item do array)
+                    <div key={proposals[0].id} className="card proposal-card">
+                      <div className="card-body">
+                        <div className="proposal-header">
+                          <div className="proposal-info">
+                            <h4>{proposals[0].clientName}</h4>
+                            <div className="proposal-meta">
+                              <span title={proposals[0].projectDescription}>📝 {proposals[0].projectDescription.length > 30 ? proposals[0].projectDescription.substring(0, 30) + '...' : proposals[0].projectDescription}</span>
+                              <span>💰 R$ {parseFloat(proposals[0].value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                              <span>⏰ {proposals[0].deadline}</span>
+                              <span>📅 {proposals[0].createdAt}</span>
+                              {proposals[0].generatedWith === 'gpt' && <span>🤖 GPT</span>}
+                              {proposals[0].generatedWith === 'simulation' && <span>🎭 Simulação</span>}
                             </div>
                           </div>
-                          <div className="proposal-content" style={{ whiteSpace: "pre-wrap" }}>{proposal.content}</div>
+                          <div className="proposal-actions">
+                            <button className="action-btn edit" title="Editar" onClick={() => toast.info('Função de edição em desenvolvimento')}>✏️</button>
+                            <button className="action-btn copy" title="Copiar" onClick={() => copyProposal(proposals[0].content)}>📋</button>
+                            <button className="action-btn delete" title="Deletar" onClick={() => deleteProposal(proposals[0].id)}>🗑️</button>
+                          </div>
+                        </div>
+                        
+                        <div className="proposal-content-header" style={{
+                          display: "flex",
+                          alignItems: "center",
+                          marginTop: "0.75rem",
+                          padding: "0.5rem",
+                          borderRadius: "4px",
+                          background: "linear-gradient(to right, rgba(var(--primary-blue-rgb), 0.05), transparent)"
+                        }}>
+                          <div style={{
+                            fontWeight: "600",
+                            color: "var(--primary-blue)"
+                          }}>
+                            Conteúdo da Proposta
+                          </div>
+                          <div style={{
+                            marginLeft: "auto",
+                            fontSize: "0.8rem",
+                            color: "var(--gray-500)"
+                          }}>
+                            <a href="#" onClick={(e) => {
+                              e.preventDefault();
+                              setActiveTab('proposals');
+                            }} style={{ color: "var(--primary-blue)" }}>Ver todas as propostas →</a>
+                          </div>
+                        </div>
+                        
+                        <div className="proposal-content" style={{ 
+                          whiteSpace: "pre-wrap", 
+                          padding: "1rem 0.5rem", 
+                          border: "1px solid var(--gray-100)",
+                          borderRadius: "4px",
+                          marginTop: "0.5rem",
+                          backgroundColor: "var(--gray-50)",
+                          maxHeight: "400px",
+                          overflowY: "auto"
+                        }}>
+                          {proposals[0].content}
                         </div>
                       </div>
-                    ))
+                    </div>
                   )}
                 </div>
               </div>
@@ -405,9 +632,157 @@ Proposta gerada em modo simulação 🎭`,
           )}
 
           {activeTab === 'proposals' && (
-            <div className="text-center" style={{ padding: '4rem 0' }}>
-              <h2>📋 Área de Propostas</h2>
-              <p className="text-gray-600">Funcionalidade em desenvolvimento...</p>
+            <div className="proposals-management-section">
+              <h1 className="section-title">📋 Gerenciamento de Propostas</h1>
+              <p className="section-subtitle">Visualize, pesquise e gerencie todas as suas propostas salvas</p>
+              
+              <div className="card search-card">
+                <div className="card-header">
+                  <h3>Pesquisar Propostas</h3>
+                  <p>Busque por cliente, descrição ou conteúdo</p>
+                </div>
+                <div className="card-body">
+                  <div className="search-form" style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="Digite termos para pesquisar..."
+                      id="searchTerm"
+                      style={{ flex: 1 }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          searchProposals(e.target.value);
+                        }
+                      }}
+                    />
+                    <button 
+                      className="btn btn-primary" 
+                      onClick={() => {
+                        const searchTerm = document.getElementById('searchTerm').value;
+                        searchProposals(searchTerm);
+                      }}
+                      style={{ minWidth: '120px' }}
+                    >
+                      🔍 Buscar
+                    </button>
+                    <button 
+                      className="btn btn-secondary" 
+                      onClick={() => {
+                        document.getElementById('searchTerm').value = '';
+                        fetchProposals();
+                      }}
+                      style={{ minWidth: '120px' }}
+                    >
+                      � Limpar
+                    </button>
+                  </div>
+                  
+                  <div className="proposal-stats" style={{ display: 'flex', justifyContent: 'space-between', marginTop: '1rem', padding: '0.5rem', backgroundColor: 'var(--gray-50)', borderRadius: 'var(--radius)' }}>
+                    <div>
+                      <strong>Total de propostas:</strong> {proposals.length}
+                    </div>
+                    <button 
+                      className="btn btn-sm" 
+                      onClick={fetchProposals}
+                      style={{
+                        backgroundColor: 'var(--gray-200)',
+                        padding: '0.25rem 0.75rem',
+                        borderRadius: 'var(--radius)',
+                        border: 'none',
+                        cursor: 'pointer',
+                        fontSize: '0.75rem',
+                      }}
+                    >
+                      🔄 Atualizar lista
+                    </button>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="proposals-grid">
+                {proposals.length === 0 ? (
+                  <div className="empty-state" style={{ margin: '2rem 0' }}>
+                    <div className="empty-state-icon">📋</div>
+                    <h3>Nenhuma proposta encontrada</h3>
+                    <p>Crie sua primeira proposta na aba Home ou limpe os filtros de pesquisa</p>
+                  </div>
+                ) : (
+                  proposals.map((proposal) => (
+                    <div key={proposal.id} className="card proposal-card">
+                      <div className="card-body">
+                        <div className="proposal-header">
+                          <div className="proposal-info">
+                            <h4>{proposal.clientName}</h4>
+                            <div className="proposal-meta">
+                              <span title={proposal.projectDescription}>📝 {proposal.projectDescription.length > 30 ? proposal.projectDescription.substring(0, 30) + '...' : proposal.projectDescription}</span>
+                              <span>💰 R$ {parseFloat(proposal.value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                              <span>⏰ {proposal.deadline}</span>
+                              <span>📅 {proposal.createdAt}</span>
+                              {proposal.generatedWith === 'gpt' && <span>🤖 GPT</span>}
+                              {proposal.generatedWith === 'simulation' && <span>🎭 Simulação</span>}
+                            </div>
+                          </div>
+                          <div className="proposal-actions">
+                            <button className="action-btn edit" title="Editar" onClick={() => toast.info('Função de edição em desenvolvimento')}>✏️</button>
+                            <button className="action-btn copy" title="Copiar" onClick={() => copyProposal(proposal.content)}>📋</button>
+                            <button className="action-btn delete" title="Deletar" onClick={() => deleteProposal(proposal.id)}>🗑️</button>
+                          </div>
+                        </div>
+                        
+                        <div 
+                          onClick={() => toggleProposal(proposal.id)} 
+                          style={{
+                            display: "flex",
+                            alignItems: "center", 
+                            cursor: "pointer",
+                            marginTop: "0.75rem",
+                            padding: "0.5rem",
+                            borderRadius: "4px",
+                            background: "linear-gradient(to right, rgba(var(--primary-blue-rgb), 0.05), transparent)",
+                            transition: "all 0.3s ease"
+                          }}
+                        >
+                          <div style={{
+                            fontWeight: "600",
+                            color: "var(--primary-blue)"
+                          }}>
+                            Conteúdo da Proposta
+                          </div>
+                          <div style={{
+                            marginLeft: "auto",
+                            width: "24px",
+                            height: "24px",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            borderRadius: "50%",
+                            background: "var(--primary-blue)",
+                            color: "white",
+                            transform: expandedProposals[proposal.id] ? "rotate(180deg)" : "rotate(0deg)",
+                            transition: "transform 0.4s ease"
+                          }}>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                              <path d="M7.247 11.14 2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z"/>
+                            </svg>
+                          </div>
+                        </div>
+                        
+                        <div style={{
+                          maxHeight: expandedProposals[proposal.id] ? "2000px" : "0",
+                          overflow: "hidden",
+                          transition: "max-height 0.5s ease-in-out, opacity 0.4s ease-in-out, transform 0.4s ease-in-out",
+                          opacity: expandedProposals[proposal.id] ? 1 : 0,
+                          transform: expandedProposals[proposal.id] ? "translateY(0)" : "translateY(-10px)"
+                        }}>
+                          <div className="proposal-content" style={{ whiteSpace: "pre-wrap", padding: "1rem 0.5rem" }}>
+                            {proposal.content}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           )}
 
@@ -417,6 +792,57 @@ Proposta gerada em modo simulação 🎭`,
               <p className="section-subtitle">Configure suas preferências e integrações da aplicação.</p>
 
               <div className="grid grid-cols-1" style={{ maxWidth: '600px' }}>
+                <div className="card">
+                  <div className="card-header">
+                    <h3>🎨 Aparência</h3>
+                    <p>Customize a aparência do aplicativo</p>
+                  </div>
+                  <div className="card-body">
+                    <div className="form-group">
+                      <label className="form-label">Tema da Aplicação</label>
+                      <div style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'space-between',
+                        padding: '1rem',
+                        backgroundColor: 'var(--gray-50)',
+                        borderRadius: 'var(--radius)',
+                        border: '1px solid var(--gray-200)'
+                      }}>
+                        <div>
+                          <strong>{darkMode ? 'Tema Escuro' : 'Tema Claro'}</strong>
+                          <p style={{ 
+                            fontSize: '0.875rem', 
+                            color: 'var(--gray-600)', 
+                            margin: '0.25rem 0 0 0' 
+                          }}>
+                            {darkMode 
+                              ? 'Interface escura para conforto visual em ambientes com pouca luz' 
+                              : 'Interface clara com fundo branco (padrão)'}
+                          </p>
+                        </div>
+                        <div 
+                          onClick={toggleTheme}
+                          className={`theme-toggle ${darkMode ? 'dark' : ''}`}
+                          role="switch"
+                          aria-checked={darkMode}
+                          tabIndex="0"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              toggleTheme();
+                              e.preventDefault();
+                            }
+                          }}
+                        >
+                          <div className="theme-toggle-thumb">
+                            {darkMode ? '🌙' : '☀️'}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
                 <div className="card">
                   <div className="card-header">
                     <h3>🤖 Integração OpenAI</h3>
@@ -518,6 +944,22 @@ Proposta gerada em modo simulação 🎭`,
                         <span style={{ color: 'var(--primary-blue)', fontSize: '1.5rem', fontWeight: '600' }}>
                           {proposals.length}
                         </span>
+                        {apiStatus.status === 'online' && (
+                          <button
+                            onClick={fetchProposals}
+                            style={{
+                              marginLeft: '0.5rem',
+                              padding: '0.25rem',
+                              background: 'none',
+                              border: 'none',
+                              cursor: 'pointer',
+                              fontSize: '0.8rem',
+                            }}
+                            title="Atualizar contagem"
+                          >
+                            🔄
+                          </button>
+                        )}
                       </div>
                       <div>
                         <strong>Modo IA:</strong><br />

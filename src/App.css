@@ -1,21 +1,117 @@
 /* App.css - Estilos específicos da aplicação PitchBot */
 
+/* Variáveis de tema claro (padrão) */
+:root {
+  --white: #ffffff;
+  --gray-50: #f9fafb;
+  --gray-100: #f3f4f6;
+  --gray-200: #e5e7eb;
+  --gray-300: #d1d5db;
+  --gray-400: #9ca3af;
+  --gray-500: #6b7280;
+  --gray-600: #4b5563;
+  --gray-700: #374151;
+  --gray-800: #1f2937;
+  --gray-900: #111827;
+  --black: #000000;
+  
+  --primary-blue: #3b82f6;
+  --primary-blue-rgb: 59, 130, 246;
+  --primary-blue-dark: #2563eb;
+  --secondary-purple: #8b5cf6;
+  --accent-orange: #f97316;
+  
+  --bg-main: var(--gray-50);
+  --bg-card: var(--white);
+  --bg-header: var(--white);
+  --bg-footer: var(--white);
+  --text-main: var(--gray-900);
+  --text-secondary: var(--gray-600);
+  --border-color: var(--gray-200);
+  
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  
+  --radius: 0.375rem;
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+}
+
+/* Variáveis de tema escuro */
+.dark-theme {
+  --white: #1a1a1a;
+  --gray-50: #121212;
+  --gray-100: #1e1e1e;
+  --gray-200: #2d2d2d;
+  --gray-300: #3d3d3d;
+  --gray-400: #5f5f5f;
+  --gray-500: #787878;
+  --gray-600: #a0a0a0;
+  --gray-700: #d4d4d4;
+  --gray-800: #e5e5e5;
+  --gray-900: #f5f5f5;
+  
+  --bg-main: #121212;
+  --bg-card: #1e1e1e;
+  --bg-header: #1a1a1a;
+  --bg-footer: #1a1a1a;
+  --text-main: #f5f5f5;
+  --text-secondary: #a0a0a0;
+  --border-color: #2d2d2d;
+  
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.2);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2);
+}
+
 /* Layout principal */
 .app {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background: linear-gradient(135deg, #F9FAFB 0%, #F3F4F6 100%);
+  background: linear-gradient(135deg, var(--bg-main) 0%, var(--gray-100) 100%);
+  color: var(--text-main);
+  transition: all 0.3s ease;
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* Theme transition effect */
+.app::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  background: radial-gradient(circle at var(--x, 50%) var(--y, 50%), 
+              rgba(255, 255, 255, 0.2) 0%, 
+              rgba(255, 255, 255, 0) 80%);
+  opacity: 0;
+  z-index: 9999;
+  transform: scale(0);
+  transition: transform 0.5s ease-out, opacity 0.5s ease-out;
+}
+
+.app.theme-transition::before {
+  opacity: 1;
+  transform: scale(3);
 }
 
 /* Header */
 .header {
-  background-color: var(--white);
-  border-bottom: 1px solid var(--gray-200);
+  background-color: var(--bg-header);
+  border-bottom: 1px solid var(--border-color);
   box-shadow: var(--shadow-sm);
   position: sticky;
   top: 0;
   z-index: 100;
+  transition: all 0.3s ease;
 }
 
 .header-content {
@@ -31,8 +127,9 @@
   gap: 0.75rem;
   font-size: 1.5rem;
   font-weight: 700;
-  color: var(--gray-900);
+  color: var(--text-main);
   text-decoration: none;
+  transition: color 0.3s ease;
 }
 
 .logo-icon {
@@ -46,6 +143,78 @@
   color: var(--white);
   font-weight: bold;
   font-size: 0.875rem;
+}
+
+/* API Status Indicator */
+.api-status-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 50%;
+  margin-left: 0.5rem;
+  position: relative;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.api-status-indicator .pulse-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  position: relative;
+}
+
+/* Online status */
+.api-status-indicator.online {
+  background-color: rgba(74, 222, 128, 0.2);
+}
+.api-status-indicator.online .pulse-dot {
+  background-color: #4ade80; /* Green */
+  animation: pulse 1.5s infinite;
+}
+
+/* Offline status */
+.api-status-indicator.offline {
+  background-color: rgba(248, 113, 113, 0.2);
+}
+.api-status-indicator.offline .pulse-dot {
+  background-color: #f87171; /* Red */
+}
+
+/* Checking status */
+.api-status-indicator.checking {
+  background-color: rgba(250, 204, 21, 0.2);
+}
+.api-status-indicator.checking .pulse-dot {
+  background-color: #facc15; /* Yellow */
+  animation: pulse 0.8s infinite;
+}
+
+/* Error status */
+.api-status-indicator.error {
+  background-color: rgba(248, 113, 113, 0.2);
+}
+.api-status-indicator.error .pulse-dot {
+  background-color: #f87171; /* Red */
+  animation: pulse 0.5s infinite;
+}
+
+/* Pulse animation */
+@keyframes pulse {
+  0% {
+    transform: scale(0.8);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0.8);
+    opacity: 0.8;
+  }
 }
 
 .nav {
@@ -67,6 +236,25 @@
   background-color: var(--gray-100);
 }
 
+.theme-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  margin-left: 1rem;
+  background-color: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.theme-button:hover {
+  background-color: var(--gray-100);
+}
+
 /* Main content */
 .main {
   flex: 1;
@@ -84,14 +272,16 @@
 .section-title {
   font-size: 1.875rem;
   font-weight: 700;
-  color: var(--gray-900);
+  color: var(--text-main);
   margin-bottom: 0.5rem;
+  transition: color 0.3s ease;
 }
 
 .section-subtitle {
-  color: var(--gray-600);
+  color: var(--text-secondary);
   font-size: 1.125rem;
   margin-bottom: 2rem;
+  transition: color 0.3s ease;
 }
 
 /* Form card */
@@ -315,12 +505,48 @@
   margin: 0;
 }
 
+/* Theme Toggle */
+.theme-toggle {
+  width: 56px;
+  height: 28px;
+  background-color: var(--gray-300);
+  border-radius: 14px;
+  position: relative;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.theme-toggle.dark {
+  background-color: var(--primary-blue);
+}
+
+.theme-toggle-thumb {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  background-color: var(--white);
+  border-radius: 50%;
+  top: 3px;
+  left: 3px;
+  transition: transform 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.theme-toggle.dark .theme-toggle-thumb {
+  transform: translateX(28px);
+}
+
 /* Footer */
 .footer {
-  background-color: var(--white);
-  border-top: 1px solid var(--gray-200);
+  background-color: var(--bg-footer);
+  border-top: 1px solid var(--border-color);
   padding: 2rem 0;
   margin-top: auto;
+  transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
 .footer-content {
