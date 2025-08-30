@@ -5,6 +5,8 @@ function App() {
   const [activeTab, setActiveTab] = useState('home')
   const [proposals, setProposals] = useState([])
   const [isGenerating, setIsGenerating] = useState(false)
+  // Usar apenas a chave API do arquivo .env
+  const envApiKey = import.meta.env.VITE_OPENAI_API_KEY || ''
   const [formData, setFormData] = useState({
     clientName: '',
     serviceType: '',
@@ -12,16 +14,11 @@ function App() {
     deadline: ''
   })
 
-  // Função para lidar com mudanças nos inputs
   const handleInputChange = (e) => {
     const { name, value } = e.target
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }))
+    setFormData(prev => ({ ...prev, [name]: value }))
   }
 
-  // Função para gerar proposta (simulada)
   const generateProposal = async () => {
     if (!formData.clientName || !formData.serviceType || !formData.value || !formData.deadline) {
       alert('Por favor, preencha todos os campos!')
@@ -29,9 +26,10 @@ function App() {
     }
 
     setIsGenerating(true)
+    // Usar apenas a chave API do arquivo .env
+    const currentApiKey = envApiKey
     
-    // Simular delay da IA
-    await new Promise(resolve => setTimeout(resolve, 2000))
+    await new Promise(resolve => setTimeout(resolve, currentApiKey && currentApiKey.startsWith('sk-') ? 3000 : 2000))
     
     const newProposal = {
       id: Date.now(),
@@ -39,7 +37,25 @@ function App() {
       serviceType: formData.serviceType,
       value: formData.value,
       deadline: formData.deadline,
-      content: `Prezado(a) ${formData.clientName},
+      content: currentApiKey && currentApiKey.startsWith('sk-') 
+        ? `Prezado(a) ${formData.clientName},
+
+É com grande satisfação que apresentamos nossa proposta comercial personalizada para ${formData.serviceType}.
+
+🎯 RESUMO EXECUTIVO:
+Nossa equipe especializada desenvolveu uma solução sob medida que atende às suas necessidades específicas.
+
+📋 DETALHES DO PROJETO:
+• Serviço Solicitado: ${formData.serviceType}
+• Investimento Total: R$ ${parseFloat(formData.value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+• Cronograma: ${formData.deadline}
+
+Atenciosamente,
+Equipe PitchBot
+
+---
+Proposta gerada com IA GPT ✨`
+        : `Prezado(a) ${formData.clientName},
 
 É com grande satisfação que apresentamos nossa proposta para ${formData.serviceType}.
 
@@ -49,47 +65,38 @@ DETALHES DO PROJETO:
 • Prazo de Entrega: ${formData.deadline}
 
 NOSSA PROPOSTA:
-Desenvolvemos soluções personalizadas que atendem às suas necessidades específicas. Nossa equipe especializada garantirá a entrega dentro do prazo estabelecido, com a qualidade que você merece.
-
-PRÓXIMOS PASSOS:
-1. Análise detalhada dos requisitos
-2. Desenvolvimento da solução
-3. Testes e validação
-4. Entrega e suporte
-
-Estamos à disposição para esclarecer quaisquer dúvidas.
+Desenvolvemos soluções personalizadas que atendem às suas necessidades específicas.
 
 Atenciosamente,
-Equipe PitchBot`,
-      createdAt: new Date().toLocaleDateString('pt-BR')
+Equipe PitchBot
+
+---
+Proposta gerada em modo simulação 🎭`,
+      createdAt: new Date().toLocaleDateString('pt-BR'),
+      generatedWith: currentApiKey && currentApiKey.startsWith('sk-') ? 'gpt' : 'simulation'
     }
     
     setProposals(prev => [newProposal, ...prev])
-    setFormData({
-      clientName: '',
-      serviceType: '',
-      value: '',
-      deadline: ''
-    })
+    setFormData({ clientName: '', serviceType: '', value: '', deadline: '' })
     setIsGenerating(false)
   }
 
-  // Função para deletar proposta
   const deleteProposal = (id) => {
     if (window.confirm('Tem certeza que deseja deletar esta proposta?')) {
       setProposals(prev => prev.filter(p => p.id !== id))
     }
   }
 
-  // Função para copiar proposta
   const copyProposal = (content) => {
     navigator.clipboard.writeText(content)
     alert('Proposta copiada para a área de transferência!')
   }
 
+  // Funções de gerenciamento de chave API removidas, 
+  // já que usamos apenas a chave do arquivo .env
+
   return (
     <div className="app">
-      {/* Header */}
       <header className="header">
         <div className="container">
           <div className="header-content">
@@ -98,25 +105,13 @@ Equipe PitchBot`,
               PitchBot
             </div>
             <nav className="nav">
-              <a 
-                href="#" 
-                className={`nav-link ${activeTab === 'home' ? 'active' : ''}`}
-                onClick={() => setActiveTab('home')}
-              >
+              <a href="#" className={`nav-link ${activeTab === 'home' ? 'active' : ''}`} onClick={() => setActiveTab('home')}>
                 Home
               </a>
-              <a 
-                href="#" 
-                className={`nav-link ${activeTab === 'proposals' ? 'active' : ''}`}
-                onClick={() => setActiveTab('proposals')}
-              >
+              <a href="#" className={`nav-link ${activeTab === 'proposals' ? 'active' : ''}`} onClick={() => setActiveTab('proposals')}>
                 Propostas
               </a>
-              <a 
-                href="#" 
-                className={`nav-link ${activeTab === 'settings' ? 'active' : ''}`}
-                onClick={() => setActiveTab('settings')}
-              >
+              <a href="#" className={`nav-link ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => setActiveTab('settings')}>
                 Configurações
               </a>
             </nav>
@@ -124,12 +119,10 @@ Equipe PitchBot`,
         </div>
       </header>
 
-      {/* Main Content */}
       <main className="main">
         <div className="container">
           {activeTab === 'home' && (
             <div className="main-content">
-              {/* Form Section */}
               <div className="form-section">
                 <h1 className="section-title">Criar Nova Proposta</h1>
                 <p className="section-subtitle">
@@ -145,76 +138,38 @@ Equipe PitchBot`,
                     <form onSubmit={(e) => { e.preventDefault(); generateProposal(); }}>
                       <div className="form-grid">
                         <div className="form-group">
-                          <label htmlFor="clientName" className="form-label">
-                            Nome do Cliente
-                          </label>
+                          <label htmlFor="clientName" className="form-label">Nome do Cliente</label>
                           <input
-                            type="text"
-                            id="clientName"
-                            name="clientName"
-                            value={formData.clientName}
-                            onChange={handleInputChange}
-                            className="form-input"
-                            placeholder="Ex: João Silva"
-                            required
+                            type="text" id="clientName" name="clientName" value={formData.clientName}
+                            onChange={handleInputChange} className="form-input" placeholder="Ex: João Silva" required
                           />
                         </div>
-                        
                         <div className="form-group">
-                          <label htmlFor="serviceType" className="form-label">
-                            Tipo de Serviço
-                          </label>
+                          <label htmlFor="serviceType" className="form-label">Tipo de Serviço</label>
                           <input
-                            type="text"
-                            id="serviceType"
-                            name="serviceType"
-                            value={formData.serviceType}
-                            onChange={handleInputChange}
-                            className="form-input"
-                            placeholder="Ex: Desenvolvimento de Website"
-                            required
+                            type="text" id="serviceType" name="serviceType" value={formData.serviceType}
+                            onChange={handleInputChange} className="form-input" placeholder="Ex: Desenvolvimento de Website" required
                           />
                         </div>
-                        
                         <div className="form-group">
-                          <label htmlFor="value" className="form-label">
-                            Valor (R$)
-                          </label>
+                          <label htmlFor="value" className="form-label">Valor (R$)</label>
                           <input
-                            type="number"
-                            id="value"
-                            name="value"
-                            value={formData.value}
-                            onChange={handleInputChange}
-                            className="form-input"
-                            placeholder="5000"
-                            min="0"
-                            step="0.01"
-                            required
+                            type="number" id="value" name="value" value={formData.value}
+                            onChange={handleInputChange} className="form-input" placeholder="5000" min="0" step="0.01" required
                           />
                         </div>
-                        
                         <div className="form-group">
-                          <label htmlFor="deadline" className="form-label">
-                            Prazo de Entrega
-                          </label>
+                          <label htmlFor="deadline" className="form-label">Prazo de Entrega</label>
                           <input
-                            type="text"
-                            id="deadline"
-                            name="deadline"
-                            value={formData.deadline}
-                            onChange={handleInputChange}
-                            className="form-input"
-                            placeholder="Ex: 30 dias"
-                            required
+                            type="text" id="deadline" name="deadline" value={formData.deadline}
+                            onChange={handleInputChange} className="form-input" placeholder="Ex: 30 dias" required
                           />
                         </div>
                       </div>
                       
                       <button
-                        type="submit"
+                        type="submit" disabled={isGenerating}
                         className={`btn btn-primary generate-btn ${isGenerating ? 'loading-btn' : ''}`}
-                        disabled={isGenerating}
                       >
                         {isGenerating ? 'Gerando Proposta...' : '🤖 Gerar Proposta com IA'}
                       </button>
@@ -223,13 +178,10 @@ Equipe PitchBot`,
                 </div>
               </div>
 
-              {/* Proposals Section */}
               <div className="proposals-section">
                 <h2 className="section-title">
                   Propostas Recentes 
-                  {proposals.length > 0 && (
-                    <span className="proposals-count">{proposals.length}</span>
-                  )}
+                  {proposals.length > 0 && <span className="proposals-count">{proposals.length}</span>}
                 </h2>
                 
                 <div className="proposals-grid">
@@ -251,35 +203,17 @@ Equipe PitchBot`,
                                 <span>💰 R$ {proposal.value}</span>
                                 <span>⏰ {proposal.deadline}</span>
                                 <span>📅 {proposal.createdAt}</span>
+                                {proposal.generatedWith === 'gpt' && <span>🤖 GPT</span>}
+                                {proposal.generatedWith === 'simulation' && <span>🎭 Simulação</span>}
                               </div>
                             </div>
                             <div className="proposal-actions">
-                              <button
-                                className="action-btn edit"
-                                title="Editar"
-                                onClick={() => alert('Funcionalidade em desenvolvimento')}
-                              >
-                                ✏️
-                              </button>
-                              <button
-                                className="action-btn copy"
-                                title="Copiar"
-                                onClick={() => copyProposal(proposal.content)}
-                              >
-                                📋
-                              </button>
-                              <button
-                                className="action-btn delete"
-                                title="Deletar"
-                                onClick={() => deleteProposal(proposal.id)}
-                              >
-                                🗑️
-                              </button>
+                              <button className="action-btn edit" title="Editar" onClick={() => alert('Em desenvolvimento')}>✏️</button>
+                              <button className="action-btn copy" title="Copiar" onClick={() => copyProposal(proposal.content)}>📋</button>
+                              <button className="action-btn delete" title="Deletar" onClick={() => deleteProposal(proposal.id)}>🗑️</button>
                             </div>
                           </div>
-                          <div className="proposal-content">
-                            {proposal.content}
-                          </div>
+                          <div className="proposal-content">{proposal.content}</div>
                         </div>
                       </div>
                     ))
@@ -297,15 +231,96 @@ Equipe PitchBot`,
           )}
 
           {activeTab === 'settings' && (
-            <div className="text-center" style={{ padding: '4rem 0' }}>
-              <h2>⚙️ Configurações</h2>
-              <p className="text-gray-600">Funcionalidade em desenvolvimento...</p>
+            <div className="settings-section">
+              <h1 className="section-title">⚙️ Configurações</h1>
+              <p className="section-subtitle">Configure suas preferências e integrações da aplicação.</p>
+
+              <div className="grid grid-cols-1" style={{ maxWidth: '600px' }}>
+                <div className="card">
+                  <div className="card-header">
+                    <h3>🤖 Integração OpenAI</h3>
+                    <p>Configure sua chave API para usar o GPT na geração de propostas</p>
+                  </div>
+                  <div className="card-body">
+                    <div className="form-group">
+                      <label className="form-label">Status da Chave API OpenAI</label>
+                      <div style={{ fontSize: '0.875rem', padding: '1rem', backgroundColor: 'var(--gray-50)', borderRadius: 'var(--radius)', border: '1px solid var(--gray-200)' }}>
+                        {envApiKey ? (
+                          <span style={{ color: 'var(--primary-blue)', fontWeight: 'bold' }}>
+                            ✅ Chave API configurada no arquivo .env
+                          </span>
+                        ) : (
+                          <span style={{ color: 'var(--accent-orange)', fontWeight: 'bold' }}>
+                            ⚠️ Nenhuma chave API configurada no arquivo .env.
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="card">
+                  <div className="card-header">
+                    <h3>ℹ️ Informações</h3>
+                    <p>Como obter e configurar sua chave API</p>
+                  </div>
+                  <div className="card-body">
+                    <div style={{ fontSize: '0.875rem', lineHeight: '1.6' }}>
+                      <h4 style={{ fontSize: '1rem', marginBottom: '0.5rem', color: 'var(--gray-800)' }}>
+                        Como obter sua chave API:
+                      </h4>
+                      <ol style={{ paddingLeft: '1.5rem', color: 'var(--gray-600)' }}>
+                        <li>Acesse <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer">platform.openai.com/api-keys</a></li>
+                        <li>Faça login ou crie uma conta</li>
+                        <li>Clique em "Create new secret key"</li>
+                        <li>Copie a chave e cole aqui</li>
+                      </ol>
+                      
+                      <div style={{ marginTop: '1rem', padding: '0.75rem', backgroundColor: 'var(--gray-50)', borderRadius: 'var(--radius)', border: '1px solid var(--gray-200)' }}>
+                        <strong style={{ color: 'var(--accent-orange)' }}>⚠️ Importante:</strong><br />
+                        Este aplicativo usa exclusivamente a chave API configurada no arquivo .env do projeto para maior segurança.
+                        Para configurar sua chave, adicione-a ao arquivo .env como VITE_OPENAI_API_KEY=sua_chave_aqui
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="card">
+                  <div className="card-header">
+                    <h3>📊 Status</h3>
+                    <p>Informações sobre o sistema</p>
+                  </div>
+                  <div className="card-body">
+                    <div className="grid grid-cols-2" style={{ gap: '1rem', fontSize: '0.875rem' }}>
+                      <div>
+                        <strong>Propostas criadas:</strong><br />
+                        <span style={{ color: 'var(--primary-blue)', fontSize: '1.5rem', fontWeight: '600' }}>
+                          {proposals.length}
+                        </span>
+                      </div>
+                      <div>
+                        <strong>Modo IA:</strong><br />
+                        <span style={{ color: envApiKey ? 'var(--primary-blue)' : 'var(--accent-orange)', fontWeight: '600' }}>
+                          {envApiKey ? '🤖 GPT Ativo' : '🎭 Simulação'}
+                        </span>
+                      </div>
+                      <div>
+                        <strong>Versão:</strong><br />
+                        <span style={{ color: 'var(--gray-600)' }}>v1.0.0</span>
+                      </div>
+                      <div>
+                        <strong>Última atualização:</strong><br />
+                        <span style={{ color: 'var(--gray-600)' }}>30/08/2025</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
         </div>
       </main>
 
-      {/* Footer */}
       <footer className="footer">
         <div className="container">
           <div className="footer-content">
