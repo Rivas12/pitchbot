@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react'
+import { ToastContainer, toast } from 'react-toastify'
+import 'react-toastify/dist/ReactToastify.css'
 import './App.css'
 
 function App() {
@@ -47,7 +49,7 @@ function App() {
 
   const generateProposal = async () => {
     if (!formData.clientName || !formData.projectDescription || !formData.value || !formData.deadline) {
-      alert('Por favor, preencha todos os campos obrigatórios!')
+      toast.error('Por favor, preencha todos os campos obrigatórios!')
       return
     }
 
@@ -162,7 +164,7 @@ Proposta gerada em modo simulação 🎭`,
       
     } catch (error) {
       console.error('Erro ao gerar proposta:', error)
-      alert('Ocorreu um erro ao gerar a proposta. Por favor, tente novamente.')
+      toast.error('Ocorreu um erro ao gerar a proposta. Por favor, tente novamente.')
     } finally {
       // Limpar formulário e finalizar estado de carregamento
       setFormData({ 
@@ -180,12 +182,13 @@ Proposta gerada em modo simulação 🎭`,
   const deleteProposal = (id) => {
     if (window.confirm('Tem certeza que deseja deletar esta proposta?')) {
       setProposals(prev => prev.filter(p => p.id !== id))
+      toast.info('Proposta deletada com sucesso')
     }
   }
 
   const copyProposal = (content) => {
     navigator.clipboard.writeText(content)
-    alert('Proposta copiada para a área de transferência!')
+    toast.success('Proposta copiada para a área de transferência!')
   }
 
   // Funções de gerenciamento de chave API removidas, 
@@ -193,6 +196,18 @@ Proposta gerada em modo simulação 🎭`,
 
   return (
     <div className="app">
+      <ToastContainer 
+        position="top-right"
+        autoClose={3000}
+        hideProgressBar={false}
+        newestOnTop={true}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme="light"
+      />
       <header className="header">
         <div className="container">
           <div className="header-content">
@@ -374,7 +389,7 @@ Proposta gerada em modo simulação 🎭`,
                               </div>
                             </div>
                             <div className="proposal-actions">
-                              <button className="action-btn edit" title="Editar" onClick={() => alert('Em desenvolvimento')}>✏️</button>
+                              <button className="action-btn edit" title="Editar" onClick={() => toast.info('Função de edição em desenvolvimento')}>✏️</button>
                               <button className="action-btn copy" title="Copiar" onClick={() => copyProposal(proposal.content)}>📋</button>
                               <button className="action-btn delete" title="Deletar" onClick={() => deleteProposal(proposal.id)}>🗑️</button>
                             </div>
