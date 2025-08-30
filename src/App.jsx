@@ -246,19 +246,23 @@ Proposta gerada em modo simulação 🎭`,
     } catch (error) {
       console.error('Erro ao gerar proposta:', error)
       toast.error('Ocorreu um erro ao gerar a proposta. Por favor, tente novamente.')
-    } finally {
-      // Limpar formulário e finalizar estado de carregamento
-      setFormData({ 
-        clientName: '', 
-        projectDescription: '', 
-        additionalPoints: '', 
-        value: '', 
-        deadline: '',
-        showAdditionalPoints: false,  // Reset to collapsed state after submission
-        projectId: ''
-      })
+      // Apenas finalizamos o estado de carregamento em caso de erro, 
+      // mantendo os dados do formulário intactos
       setIsGenerating(false)
+      return // Saímos da função sem limpar o formulário em caso de erro
     }
+    
+    // Limpar formulário apenas em caso de sucesso
+    setFormData({ 
+      clientName: '', 
+      projectDescription: '', 
+      additionalPoints: '', 
+      value: '', 
+      deadline: '',
+      showAdditionalPoints: false,  // Reset to collapsed state after submission
+      projectId: ''
+    })
+    setIsGenerating(false)
   }
 
   const deleteProposal = async (id) => {

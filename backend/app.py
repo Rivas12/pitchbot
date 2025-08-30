@@ -45,6 +45,13 @@ def init_db():
     )
     ''')
     
+    # Verifica se a coluna project_id existe, se não, adiciona
+    try:
+        cursor.execute('SELECT project_id FROM proposals LIMIT 1')
+    except sqlite3.OperationalError:
+        # A coluna não existe, vamos adicioná-la
+        cursor.execute('ALTER TABLE proposals ADD COLUMN project_id INTEGER')
+    
     # Criação da tabela de projetos
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS projects (
@@ -86,17 +93,25 @@ def generate_proposal():
     project_id = data.get('projectId')
     project_description = ""
     
-    if project_id:
-        # Buscar informações do projeto selecionado
-        conn = sqlite3.connect(DB_PATH)
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-        cursor.execute('SELECT * FROM projects WHERE id = ?', (project_id,))
-        project = cursor.fetchone()
-        conn.close()
-        
-        if project:
-            project_description = f"Projeto: {project['name']} - {project['description']}"
+    # Só busca informações do projeto se projectId for um valor válido (não None, não vazio, não 0)
+    if project_id and str(project_id).strip():
+        try:
+            # Buscar informações do projeto selecionado
+            conn = sqlite3.connect(DB_PATH)
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM projects WHERE id = ?', (project_id,))
+            project = cursor.fetchone()
+            conn.close()
+            
+            if project:
+                project_description = f"Projeto: {project['name']} - {project['description']}"
+            else:
+                # Se o projeto não for encontrado, define project_id como None
+                project_id = None
+        except Exception as e:
+            print(f"Erro ao buscar projeto: {str(e)}")
+            project_id = None
     
     # Sempre use uma chave API - priorize a do cliente, depois a do ambiente, ou use uma padrão
     api_key = data.get('apiKey') or openai.api_key or os.environ.get('DEFAULT_OPENAI_API_KEY')
@@ -126,22 +141,27 @@ def generate_proposal():
         last_id = cursor.fetchone()[0]
         conn.close()
         
+        proposal_data = {
+            'id': last_id,
+            'clientName': data['clientName'],
+            'projectDescription': data['projectDescription'],
+            'value': data['value'],
+            'deadline': data['deadline'],
+            'additionalPoints': data.get('additionalPoints', ''),
+            'customPrompt': data.get('customPrompt', ''),
+            'content': proposal_content,
+            'generatedWith': 'gpt',
+            'author': PROPOSAL_AUTHOR,
+            'createdAt': datetime.datetime.now().isoformat()
+        }
+        
+        # Só adiciona project_id se ele existir e for válido
+        if project_id and str(project_id).strip():
+            proposal_data['projectId'] = project_id
+            
         response = {
             'success': True,
-            'proposal': {
-                'id': last_id,
-                'clientName': data['clientName'],
-                'projectDescription': data['projectDescription'],
-                'value': data['value'],
-                'deadline': data['deadline'],
-                'additionalPoints': data.get('additionalPoints', ''),
-                'customPrompt': data.get('customPrompt', ''),
-                'projectId': data.get('projectId'),
-                'content': proposal_content,
-                'generatedWith': 'gpt',
-                'author': PROPOSAL_AUTHOR,
-                'createdAt': datetime.datetime.now().isoformat()
-            }
+            'proposal': proposal_data
         }
         
         return jsonify(response)
@@ -242,8 +262,8 @@ Assine como autor fornecido no final do texto, indicando que é um freelancer pr
     if additional_points:
         prompt += f"\n\n{tag_bold_open}PONTOS ADICIONAIS:{tag_bold_close} {additional_points}"
     
-    # Adiciona informações do projeto selecionado, se houver
-    if project_description:
+    # Adiciona informações do projeto selecionado, se houver e não for None/vazio
+    if project_description and project_description.strip():
         prompt += f"\n\n{tag_bold_open}PROJETO SELECIONADO:{tag_bold_close} {project_description}"
     
     if custom_prompt:
@@ -334,15 +354,44 @@ def save_proposal(client_name, project_description, value, deadline,
     
     created_at = datetime.datetime.now().isoformat()
     
-    cursor.execute('''
-    INSERT INTO proposals (
-        client_name, project_description, value, deadline, 
-        additional_points, custom_prompt, content, created_at, author, model, project_id
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ''', (
-        client_name, project_description, value, deadline,
-        additional_points, custom_prompt, content, created_at, author, model, project_id
-    ))
+    # Verifica se project_id existe e se a coluna project_id existe na tabela
+    if project_id is not None:
+        try:
+            cursor.execute('''
+            INSERT INTO proposals (
+                client_name, project_description, value, deadline, 
+                additional_points, custom_prompt, content, created_at, author, model, project_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                client_name, project_description, value, deadline,
+                additional_points, custom_prompt, content, created_at, author, model, project_id
+            ))
+        except sqlite3.OperationalError as e:
+            # Se a coluna project_id não existir, insere sem ela
+            if "no column named project_id" in str(e):
+                cursor.execute('''
+                INSERT INTO proposals (
+                    client_name, project_description, value, deadline, 
+                    additional_points, custom_prompt, content, created_at, author, model
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    client_name, project_description, value, deadline,
+                    additional_points, custom_prompt, content, created_at, author, model
+                ))
+            else:
+                # Se for outro erro, relança a exceção
+                raise
+    else:
+        # Se não tem project_id, insere sem ele
+        cursor.execute('''
+        INSERT INTO proposals (
+            client_name, project_description, value, deadline, 
+            additional_points, custom_prompt, content, created_at, author, model
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            client_name, project_description, value, deadline,
+            additional_points, custom_prompt, content, created_at, author, model
+        ))
     
     proposal_id = cursor.lastrowid
     conn.commit()
