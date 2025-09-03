@@ -578,7 +578,111 @@ Proposta gerada em modo simulação 🎭`,
                         
                         {/* Descrição do projeto - campo maior */}
                         <div className="form-group">
-                          <label htmlFor="projectDescription" className="form-label">Descrição do Projeto</label>
+                          <label htmlFor="projectDescription" className="form-label">
+                            Descrição do Projeto
+                            <button 
+                              type="button"
+                              onClick={async () => {
+                                const freelaUrl = prompt("Cole o link do projeto do 99freelas:");
+                                if (freelaUrl) {
+                                  if (!freelaUrl.includes('99freelas.com')) {
+                                    toast.error("O link fornecido não parece ser do 99freelas. Verifique e tente novamente.");
+                                    return;
+                                  }
+                                  
+                                  const toastId = toast.info("Importando dados do 99freelas...", { autoClose: false });
+                                  try {
+                                    const response = await fetch('http://localhost:5000/api/extract-99freelas', {
+                                      method: 'POST',
+                                      headers: {
+                                        'Content-Type': 'application/json',
+                                      },
+                                      body: JSON.stringify({ url: freelaUrl }),
+                                    });
+                                    
+                                    // Verifica se a resposta HTTP foi bem-sucedida
+                                    if (!response.ok) {
+                                      toast.update(toastId, { 
+                                        render: `Erro ao acessar o servidor: ${response.status} ${response.statusText}`, 
+                                        type: toast.TYPE.ERROR,
+                                        autoClose: 5000
+                                      });
+                                      return;
+                                    }
+                                    
+                                    const result = await response.json();
+                                    
+                                    if (result.success && result.projectData) {
+                                      // Preencher os campos com os dados extraídos
+                                      // Formatação e limpeza dos dados antes de preencher
+                                      let extractedDeadline = result.projectData.deadline || '';
+                                      
+                                      // Remover textos extras como "ClienteFhase I" e manter apenas dados relevantes como "30 dias"
+                                      if (extractedDeadline.includes('Cliente')) {
+                                        extractedDeadline = extractedDeadline.replace(/Cliente.*?(?=\d|$)/i, '').trim();
+                                      }
+                                      
+                                      
+                                      setFormData(prev => ({
+                                        ...prev,
+                                        clientName: result.projectData.clientName || prev.clientName,
+                                        projectDescription: result.projectData.projectDescription || prev.projectDescription,
+                                        value: result.projectData.value || prev.value,
+                                      }));
+                                      toast.update(toastId, { 
+                                        render: "Dados importados com sucesso!", 
+                                        type: toast.TYPE.SUCCESS,
+                                        autoClose: 3000
+                                      });
+                                      
+                                      // Mostre detalhes de quais campos foram preenchidos
+                                      let camposPreenchidos = [];
+                                      if (result.projectData.clientName) camposPreenchidos.push("Nome do cliente");
+                                      if (result.projectData.projectDescription) camposPreenchidos.push("Descrição");
+                                      if (result.projectData.value) camposPreenchidos.push("Valor");
+                                      
+                                      if (camposPreenchidos.length > 0) {
+                                        setTimeout(() => {
+                                          toast.info(`Campos preenchidos: ${camposPreenchidos.join(", ")}`);
+                                        }, 500);
+                                      }
+                                      
+                                    } else {
+                                      toast.update(toastId, { 
+                                        render: result.error || "Não foi possível extrair os dados do projeto", 
+                                        type: toast.TYPE.ERROR,
+                                        autoClose: 5000
+                                      });
+                                    }
+                                  } catch (error) {
+                                    console.error("Erro ao importar dados do 99freelas:", error);
+                                    toast.update(toastId, { 
+                                      render: "Erro ao comunicar com o servidor. Verifique se o backend está rodando e tente novamente.", 
+                                      type: toast.TYPE.ERROR,
+                                      autoClose: 5000
+                                    });
+                                  }
+                                }
+                              }}
+                              className="btn-icon"
+                              title="Importar do 99freelas"
+                              style={{
+                                marginLeft: "8px",
+                                background: "none",
+                                border: "none",
+                                cursor: "pointer",
+                                padding: "0",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                color: "#00b8e2"
+                              }}
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                                <path d="M4.715 6.542 3.343 7.914a3 3 0 1 0 4.243 4.243l1.828-1.829A3 3 0 0 0 8.586 5.5L8 6.086a1.002 1.002 0 0 0-.154.199 2 2 0 0 1 .861 3.337L6.88 11.45a2 2 0 1 1-2.83-2.83l.793-.792a4.018 4.018 0 0 1-.128-1.287z"/>
+                                <path d="M6.586 4.672A3 3 0 0 0 7.414 9.5l.775-.776a2 2 0 0 1-.896-3.346L9.12 3.55a2 2 0 1 1 2.83 2.83l-.793.792c.112.42.155.855.128 1.287l1.372-1.372a3 3 0 1 0-4.243-4.243L6.586 4.672z"/>
+                              </svg>
+                            </button>
+                          </label>
                           <textarea
                             id="projectDescription" name="projectDescription" value={formData.projectDescription}
                             onChange={handleInputChange} className="form-input" 
@@ -891,7 +995,7 @@ Proposta gerada em modo simulação 🎭`,
                           onClick={() => toggleProposal(proposal.id)} 
                           style={{
                             display: "flex",
-                            alignItems: "center", 
+                            alignItems: "center",
                             cursor: "pointer",
                             marginTop: "0.75rem",
                             padding: "0.5rem",

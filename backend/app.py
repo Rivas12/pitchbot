@@ -5,6 +5,9 @@ import openai
 import sqlite3
 import datetime
 import json
+import requests
+from bs4 import BeautifulSoup
+import re
 from dotenv import load_dotenv
 
 # Carregar variáveis de ambiente
@@ -74,6 +77,147 @@ init_db()
 def health_check():
     """Rota para verificar se a API está funcionando"""
     return jsonify({'status': 'online', 'message': 'API Flask está funcionando!'})
+
+@app.route('/api/extract-99freelas', methods=['POST'])
+def extract_99freelas():
+    """Extrai informações de um projeto do 99freelas a partir da URL"""
+    data = request.json
+    
+    if not data or 'url' not in data:
+        return jsonify({
+            'success': False,
+            'error': 'URL não fornecida'
+        }), 400
+    
+    url = data['url']
+    
+    # Verifica se é uma URL do 99freelas
+    if '99freelas.com' not in url:
+        return jsonify({
+            'success': False,
+            'error': 'A URL fornecida não é do 99freelas'
+        }), 400
+    
+    try:
+        # Faz a requisição para a página do projeto
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        response = requests.get(url, headers=headers, timeout=10)
+        
+        if response.status_code != 200:
+            return jsonify({
+                'success': False,
+                'error': f'Erro ao acessar a página. Status code: {response.status_code}'
+            }), 500
+        
+        # Parse do HTML
+        soup = BeautifulSoup(response.text, 'html.parser')
+        
+        # Extrair informações do projeto
+        project_data = {}
+        
+        # Nome do cliente - tentar diferentes estratégias
+        client_name = None
+        
+        # Estratégia 1: Buscar pelo elemento específico do nome do cliente
+        client_name_elem = soup.select_one('.info-usuario-nome span.name')
+        if client_name_elem and client_name_elem.text.strip():
+            client_name = client_name_elem.text.strip()
+            
+        # Estratégia 2: Se não encontrou, buscar na seção de informações do cliente
+        if not client_name:
+            client_div = soup.select_one('div:-soup-contains("Cliente") h2')
+            if client_div and client_div.text.strip():
+                client_name = client_div.text.strip()
+                
+        # Estratégia 3: Tentar encontrar o texto "Cliente:" seguido do nome
+        if not client_name:
+            cliente_pattern = re.search(r'Cliente:?\s*([A-Za-z0-9\s]+)', response.text)
+            if cliente_pattern:
+                client_name = cliente_pattern.group(1).strip()
+                
+        # Se ainda não tiver nome, usar um nome padrão
+        if not client_name:
+            client_name = "Cliente"
+            
+        project_data['clientName'] = client_name
+        
+        # Descrição do projeto - tentar diferentes estratégias
+        project_description = None
+        
+        # Estratégia 1: Buscar pelo elemento específico da descrição
+        project_desc_elem = soup.select_one('.item-text.project-description')
+        if project_desc_elem and project_desc_elem.text.strip():
+            project_description = project_desc_elem.text.strip()
+        
+        # Estratégia 2: Procurar por outros elementos que possam conter a descrição
+        if not project_description:
+            desc_elem = soup.select_one('div:-soup-contains("Descrição do Projeto:"), div.project-description')
+            if desc_elem and desc_elem.text.strip():
+                # Extrair apenas a parte após "Descrição do Projeto:"
+                desc_text = desc_elem.text.strip()
+                desc_match = re.search(r'Descrição do Projeto:?\s*(.+)', desc_text, re.DOTALL)
+                if desc_match:
+                    project_description = desc_match.group(1).strip()
+                else:
+                    project_description = desc_text
+                
+        # Estratégia 3: Procurar por qualquer texto longo que possa ser a descrição
+        if not project_description:
+            for p in soup.select('p'):
+                if p.text and len(p.text.strip()) > 100:  # Descrições geralmente são longas
+                    project_description = p.text.strip()
+                    break
+                    
+        # Se ainda não tiver descrição, usar um texto padrão
+        if not project_description:
+            project_description = "Descrição do projeto não encontrada. Por favor, preencha manualmente."
+            
+        project_data['projectDescription'] = project_description
+        
+        # Valor do projeto (se disponível) - tentar diferentes estratégias
+        value = None
+        
+        # Estratégia 1: Buscar pelo elemento específico do valor
+        value_elem = soup.select_one('div:-soup-contains("Valor Mínimo:") + div')
+        if value_elem:
+            value_text = value_elem.text.strip()
+            # Extrair apenas os números
+            value_match = re.search(r'R\$\s*([\d.,]+)', value_text)
+            if value_match:
+                value = value_match.group(1).replace('.', '').replace(',', '.')
+        
+        # Estratégia 2: Procurar por padrões de valor em toda a página
+        if not value:
+            # Buscar padrões como "R$ 5000" ou "5.000,00"
+            value_pattern = re.search(r'R\$\s*([\d.,]+)', response.text)
+            if value_pattern:
+                value = value_pattern.group(1).replace('.', '').replace(',', '.')
+                
+        # Se ainda não tiver valor, usar um valor padrão
+        if not value:
+            value = "5000"
+            
+        project_data['value'] = value
+        
+        # Não extraímos o prazo pois será preenchido manualmente pelo usuário
+        # Removida a lógica de extração de prazo conforme solicitação
+        
+        # Removemos a coleta de categorias e habilidades como pontos adicionais
+        # Vamos focar apenas nos dados principais: cliente e descrição
+        
+        return jsonify({
+            'success': True,
+            'projectData': project_data
+        })
+        
+    except Exception as e:
+        print(f"Erro ao extrair dados do 99freelas: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'Erro ao extrair dados: {str(e)}'
+        }), 500
 
 @app.route('/api/generate-proposal', methods=['POST'])
 def generate_proposal():
